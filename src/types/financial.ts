@@ -80,6 +80,19 @@ export interface InvoiceRisk {
   liquidityPriorityScore: number;
 }
 
+/** Pre-scored supplier payable for the payables negotiator agent. */
+export interface PayablePressure {
+  contactId: string;
+  contactName: string;
+  invoiceId: string;
+  amount: number;
+  daysOverdue: number;
+  urgency: Urgency;
+  recommendedAction: string;
+  /** Cash preserved by delaying payment. */
+  expectedCashImpact: number;
+}
+
 export interface LapsedCustomer {
   contactId: string;
   contactName: string;
