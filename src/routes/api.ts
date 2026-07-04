@@ -13,6 +13,11 @@ import { buildLiquidityResponse } from "../lib/services/liquidity-service.js";
 import { clearSnapshotCache, getPhaseOneSnapshot, handleOAuthCallback } from "../lib/services/phase-one-sync-service.js";
 import { buildRevenueOpportunitiesResponse } from "../lib/services/revenue-opportunities-service.js";
 import { buildSummaryResponse } from "../lib/services/summary-service.js";
+import {
+  buildEscalationActionResponse,
+  buildVoiceCallScriptResponse
+} from "../lib/services/escalation-service.js";
+import { buildVoiceTtsResponse } from "../lib/services/elevenlabs-tts-service.js";
 import { getBackendMode } from "../lib/config/runtime-mode.js";
 import { isXeroConfigured } from "../lib/config/xero-config.js";
 import { buildAuthUrl } from "../lib/xero/auth.js";
@@ -156,6 +161,33 @@ apiRouter.post("/agent/reengagement-quote", async (request, response, next) => {
 apiRouter.post("/simulate/execute", async (request, response, next) => {
   try {
     const payload = await buildSimulationExecuteResponse(request.body);
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.post("/escalation-action", async (request, response, next) => {
+  try {
+    const payload = await buildEscalationActionResponse(request.body ?? {});
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.post("/voice-call-script", async (request, response, next) => {
+  try {
+    const payload = await buildVoiceCallScriptResponse(request.body ?? {});
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.post("/voice-tts", async (request, response, next) => {
+  try {
+    const payload = await buildVoiceTtsResponse(request.body ?? {});
     response.json(payload);
   } catch (error) {
     next(error);
