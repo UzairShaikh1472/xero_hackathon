@@ -177,6 +177,15 @@ export function ControlRoomProvider({ children }: { children: ReactNode }) {
 
     try {
       const session = await createVoiceSession(draft.id, draft.targetId);
+      recordCommunication({
+        draftId: draft.id,
+        channel: "call",
+        status: "sent",
+        recipientName: draft.targetName,
+        message: "Browser voice call started",
+        callUrl: session.callUrl,
+        callToken: session.callToken,
+      });
       window.open(session.callUrl, "_blank", "noopener,noreferrer");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start call");

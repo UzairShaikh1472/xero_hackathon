@@ -6,12 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type TourAnchorId = "kpi" | "cash" | "agents";
+export type TourAnchorId = "kpi" | "cash" | "actions";
 
 const TOUR_ROUTES: Record<TourAnchorId, string> = {
   kpi: "/app",
   cash: "/app/cash",
-  agents: "/app/agents",
+  actions: "/app/actions",
 };
 
 interface TourStep {
@@ -35,11 +35,11 @@ export const TOUR_STEPS: TourStep[] = [
       "Overdue invoices, still-buying customers worth upselling, and gone-quiet customers worth winning back are tracked separately below. Northwind Logistics shows up in both Overdue and Loyalty potential: same customer, two unrelated facts about them.",
   },
   {
-    anchor: "agents",
-    title: "Agents draft the action",
+    anchor: "actions",
+    title: "Follow up and track progress",
     body:
-      "Rules identified the risk. AI drafts the message: subject, body, tone, expected cash impact, confidence. Open Northwind's draft to review, then simulate execution to see the post-execution cash impact before it touches Xero.",
-    action: "Open a draft →",
+      "Pick a channel for each overdue invoice: email for recent, AI voice for 14+ days, or human escalation for critical accounts. The timeline below records every send, call, simulation, and payment collected.",
+    action: "Send a follow-up →",
   },
 ];
 

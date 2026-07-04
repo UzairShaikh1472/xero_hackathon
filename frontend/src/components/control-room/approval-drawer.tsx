@@ -22,11 +22,24 @@ import type {
 } from "@/lib/kinetic/types";
 
 import { UrgencyDot } from "./shared";
+import {
+  REACTIVATION_VOICE_THRESHOLD_DAYS,
+  reactivationUsesVoice,
+} from "@/lib/kinetic/reactivation";
 
 function getDaysOverdue(draft: NegotiationDraft) {
   if (draft.daysOverdue != null) return draft.daysOverdue;
   const match = draft.reason.match(/(\d+)\s+days?\s+overdue/i);
   return match ? Number(match[1]) : 0;
+}
+
+function getDaysSilent(draft: NegotiationDraft) {
+  if (draft.daysSilent != null) return draft.daysSilent;
+  const inactive = draft.reason.match(/(\d+)\s+days?\s+inactive/i);
+  if (inactive) return Number(inactive[1]);
+  const silent = draft.reason.match(/(\d+)\s+days?\s+silent/i);
+  if (silent) return Number(silent[1]);
+  return 0;
 }
 
 export function ApprovalDrawer({
@@ -68,8 +81,13 @@ export function ApprovalDrawer({
   }, [activeId, draft]);
 
   const daysOverdue = getDaysOverdue(draft);
-  const canEmail = draft.agent === "receivables" && daysOverdue < 14;
-  const canVoice = draft.agent === "receivables" && daysOverdue >= 14;
+  const daysSilent = getDaysSilent(draft);
+  const canEmail =
+    (draft.agent === "receivables" && daysOverdue < 14) ||
+    (draft.agent === "reengagement" && !reactivationUsesVoice(daysSilent));
+  const canVoice =
+    (draft.agent === "receivables" && daysOverdue >= 14) ||
+    (draft.agent === "reengagement" && reactivationUsesVoice(daysSilent));
 
   const handleSendEmail = async () => {
     setSending(true);
@@ -113,7 +131,12 @@ export function ApprovalDrawer({
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <UrgencyDot u={draft.urgency} />
-              {draft.agent === "receivables" ? "Collect" : "Extend"} · {draft.targetName}
+              {draft.agent === "receivables"
+                ? "Collect"
+                : draft.agent === "reengagement"
+                  ? "Reactivate"
+                  : "Extend"}{" "}
+              · {draft.targetName}
             </SheetTitle>
               <SheetDescription className="text-muted-foreground">
                 {draft.proposedAction}
@@ -158,7 +181,11 @@ export function ApprovalDrawer({
                     className="bg-surface-2 border-hairline font-sans text-sm"
                   />
                   <p className="mt-1.5 text-xs text-muted-foreground">
-                    Greeting, invoice summary, and sign-off are added automatically when sent.
+                    {canVoice && draft.agent === "reengagement"
+                      ? `Inactive ${daysSilent}+ days — voice agent invite. Greeting and call link are added when sent.`
+                      : canEmail && draft.agent === "reengagement"
+                        ? `Inactive under ${REACTIVATION_VOICE_THRESHOLD_DAYS} days — win-back email. Greeting and sign-off are added automatically when sent.`
+                        : "Greeting, invoice summary, and sign-off are added automatically when sent."}
                   </p>
                 </div>
 
@@ -219,7 +246,7 @@ export function ApprovalDrawer({
                     className="flex-1"
                   >
                     {sending ? <Loader2 className="size-4 animate-spin" /> : null}
-                    Approve & send email
+                    {draft.agent === "reengagement" ? "Approve & send win-back" : "Approve & send email"}
                   </Button>
                 )}
 
@@ -231,7 +258,9 @@ export function ApprovalDrawer({
                       className="flex-1"
                     >
                       {sending ? <Loader2 className="size-4 animate-spin" /> : null}
-                      Send voice invite
+                      {draft.agent === "reengagement"
+                        ? "Send reactivation agent invite"
+                        : "Send voice invite"}
                     </Button>
                     <Button
                       variant="outline"

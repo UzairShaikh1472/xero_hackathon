@@ -1,12 +1,11 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Activity, Bot, LayoutDashboard, Zap } from "lucide-react";
+import { Activity, LayoutDashboard, Zap } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { to: "/app", label: "Overview", icon: LayoutDashboard, exact: true },
   { to: "/app/cash", label: "Cash Lens", icon: Activity, exact: false },
-  { to: "/app/agents", label: "Agents", icon: Bot, exact: false },
   { to: "/app/actions", label: "Actions", icon: Zap, exact: false },
 ] as const;
 
