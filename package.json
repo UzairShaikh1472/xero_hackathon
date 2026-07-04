@@ -4,8 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "tsx scripts/dev-server.ts",
     "smoke": "tsx scripts/smoke-score.ts",
+    "smoke:agents": "tsx scripts/smoke-agents.ts",
+    "smoke:api": "tsx scripts/smoke-api.ts",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "openai": "^4.104.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
