@@ -578,6 +578,27 @@ export async function sendVoiceChat(
   return envelope.data.reply;
 }
 
+export type VoiceCallReport = {
+  contactName: string;
+  invoiceNumber: string;
+  summary: string;
+  transcript: Array<{ role: "user" | "assistant"; content: string }>;
+  emailSent: boolean;
+  recipientEmail?: string;
+  message: string;
+};
+
+export async function completeVoiceCall(
+  token: string,
+  transcript: Array<{ role: "user" | "assistant"; content: string }>,
+): Promise<VoiceCallReport> {
+  const envelope = await postJson<VoiceCallReport>("/api/voice/calls/complete", {
+    token,
+    transcript,
+  });
+  return envelope.data;
+}
+
 export async function fetchFollowUps(): Promise<FollowUpsData> {
   try {
     const envelope = await fetchEnvelope<FollowUpsData>("/api/actions/follow-ups");
