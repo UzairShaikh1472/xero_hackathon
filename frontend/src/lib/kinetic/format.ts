@@ -1,14 +1,21 @@
-export const gbp = (n: number, opts: { signed?: boolean; compact?: boolean } = {}) => {
+export const formatMoney = (
+  currency: string,
+  n: number,
+  opts: { signed?: boolean; compact?: boolean } = {},
+) => {
   const abs = Math.abs(n);
   const formatted = new Intl.NumberFormat("en-GB", {
     style: "currency",
-    currency: "GBP",
+    currency,
     maximumFractionDigits: 0,
     notation: opts.compact && abs >= 10000 ? "compact" : "standard",
   }).format(abs);
-  if (opts.signed) return `${n < 0 ? "−" : "+"}${formatted}`;
-  return n < 0 ? `−${formatted}` : formatted;
+  if (opts.signed) return `${n < 0 ? "-" : "+"}${formatted}`;
+  return n < 0 ? `-${formatted}` : formatted;
 };
+
+export const gbp = (n: number, opts: { signed?: boolean; compact?: boolean } = {}) =>
+  formatMoney("GBP", n, opts);
 
 export const pct = (n: number) => `${Math.round(n * 100)}%`;
 

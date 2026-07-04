@@ -15,26 +15,21 @@ import {
 import {
   Activity,
   AlertTriangle,
-  ArrowRight,
   ArrowUpRight,
   Bot,
   CheckCircle2,
   ChevronRight,
   CircleDot,
   Landmark,
-  Play,
   RefreshCw,
   TrendingDown,
-
   TrendingUp,
   Users,
-  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
 import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
@@ -45,15 +40,24 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
-
-import { fetchControlRoom, fetchHealth, fetchXeroAuthUrl, simulateExecute } from "@/lib/kinetic/api";
-import { gbp, pct, timeAgo } from "@/lib/kinetic/format";
+import {
+  fetchControlRoom,
+  fetchHealth,
+  fetchXeroAuthUrl,
+  placeReminderCall,
+  sendReminderEmail,
+  simulateExecute,
+} from "@/lib/kinetic/api";
+import { formatMoney, pct, timeAgo } from "@/lib/kinetic/format";
 import type {
+  AuditEntry,
+  CommunicationResult,
+  ControlRoomData,
   ExecutionResult,
   NegotiationDraft,
   Urgency,
 } from "@/lib/kinetic/types";
+import { cn } from "@/lib/utils";
 
 const controlRoomQuery = queryOptions({
   queryKey: ["kinetic", "control-room"],
@@ -72,12 +76,14 @@ export const Route = createFileRoute("/")({
   component: ControlRoom,
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-
 function ControlRoom() {
-  const { data, isPending, isError, error, refetch, isFetching } =
-    useQuery(controlRoomQuery);
+  const { data, isPending, isError, error, refetch, isFetching } = useQuery(controlRoomQuery);
   const { data: health } = useQuery(healthQuery);
+  const [openDraft, setOpenDraft] = useState<NegotiationDraft | null>(null);
+  const [executions, setExecutions] = useState<ExecutionResult[]>([]);
+  const [communications, setCommunications] = useState<CommunicationResult[]>([]);
+  const [connectingXero, setConnectingXero] = useState(false);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("xero") === "connected") {
@@ -91,10 +97,6 @@ function ControlRoom() {
       );
     }
   }, [refetch]);
-  const [openDraft, setOpenDraft] = useState<NegotiationDraft | null>(null);
-  const [executions, setExecutions] = useState<ExecutionResult[]>([]);
-  const [tourStep, setTourStep] = useState<number | null>(null);
-  const [connectingXero, setConnectingXero] = useState(false);
 
   const handleConnectXero = async () => {
     setConnectingXero(true);
@@ -102,10 +104,11 @@ function ControlRoom() {
       const status = health ?? (await fetchHealth());
       if (!status.xeroConfigured) {
         alert(
-          "Xero is not configured on the backend.\n\nAdd XERO_CLIENT_ID and XERO_CLIENT_SECRET to .env (from developer.xero.com), set the redirect URI to http://localhost:3001/api/xero/callback, then restart the backend.",
+          "Xero is not configured on the backend.\n\nAdd XERO_CLIENT_ID and XERO_CLIENT_SECRET to .env, confirm the redirect URI, then restart the backend.",
         );
         return;
       }
+
       const authUrl = await fetchXeroAuthUrl();
       window.location.href = authUrl;
     } catch (err) {
@@ -119,7 +122,7 @@ function ControlRoom() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background text-foreground">
         <RefreshCw className="size-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Syncing with Xero…</p>
+        <p className="text-sm text-muted-foreground">Syncing with Xero...</p>
       </div>
     );
   }
@@ -129,9 +132,7 @@ function ControlRoom() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-4 text-foreground">
         <AlertTriangle className="size-8 text-critical" />
         <p className="text-center text-sm text-muted-foreground">
-          {error instanceof Error
-            ? error.message
-            : "Could not load dashboard data from the backend."}
+          {error instanceof Error ? error.message : "Could not load dashboard data from the backend."}
         </p>
         <Button size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
@@ -141,23 +142,29 @@ function ControlRoom() {
     );
   }
 
-  const executedTotal = executions.reduce((s, e) => s + e.cashImpact, 0);
-  const projectedShortfall = data.liquidity.projectedShortfall + executedTotal;
+  const currency = data.snapshot.currency;
+  const money = (value: number, opts?: { signed?: boolean; compact?: boolean }) =>
+    formatMoney(currency, value, opts);
+  const executedTotal = executions.reduce((sum, item) => sum + item.cashImpact, 0);
+  const projectedGap = data.liquidity.projectedShortfall + executedTotal;
 
   const handleSimulate = async (draft: NegotiationDraft) => {
-    const res = await simulateExecute(draft, projectedShortfall);
-    setExecutions((prev) => [...prev.filter((e) => e.draftId !== draft.id), res]);
+    const result = await simulateExecute(draft, projectedGap);
+    setExecutions((prev) => [...prev.filter((item) => item.draftId !== draft.id), result]);
   };
 
-  const activeAnchor = tourStep !== null ? TOUR_STEPS[tourStep].anchor : null;
+  const handleSendEmail = async (draft: NegotiationDraft) => {
+    const result = await sendReminderEmail(draft);
+    setCommunications((prev) => [...prev.filter((item) => item.draftId !== draft.id || item.channel !== "email"), result]);
+  };
+
+  const handlePlaceCall = async (draft: NegotiationDraft) => {
+    const result = await placeReminderCall(draft);
+    setCommunications((prev) => [...prev.filter((item) => item.draftId !== draft.id || item.channel !== "call"), result]);
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div
-        className="pointer-events-none fixed inset-0 -z-10"
-        style={{ background: "var(--gradient-glow)" }}
-      />
-
       <Header
         orgName={data.snapshot.orgName}
         mode={data.snapshot.mode}
@@ -169,82 +176,58 @@ function ControlRoom() {
         onRefresh={() => refetch()}
         onReset={() => {
           setExecutions([]);
-          setTourStep(null);
+          setCommunications([]);
         }}
-        onStartTour={() => setTourStep(0)}
       />
 
-
-      <main className="mx-auto max-w-[1440px] px-4 py-6 space-y-6 sm:px-6">
-        <TourAnchor id="kpi" active={activeAnchor === "kpi"}>
-          <KpiStrip
-            mode={data.snapshot.mode}
-            currentCash={data.snapshot.currentCash + executedTotal}
-            projectedShortfall={projectedShortfall}
-            baselineShortfall={data.liquidity.projectedShortfall}
-            overdueReceivables={data.snapshot.overdueReceivables}
-            opportunityTotal={data.snapshot.revenueOpportunityTotal}
-            executedTotal={executedTotal}
-          />
-        </TourAnchor>
+      <main className="mx-auto max-w-[1440px] space-y-6 px-4 py-6 sm:px-6">
+        <KpiStrip
+          currency={currency}
+          mode={data.snapshot.mode}
+          currentCash={data.snapshot.currentCash + executedTotal}
+          projectedGap={projectedGap}
+          baselineGap={data.liquidity.projectedShortfall}
+          overdueReceivables={data.snapshot.overdueReceivables}
+          opportunityTotal={data.snapshot.revenueOpportunityTotal}
+          executedTotal={executedTotal}
+        />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <TourAnchor id="cash" active={activeAnchor === "cash"}>
-            <CashFlowLens data={data} onOpen={setOpenDraft} />
-          </TourAnchor>
-          <TourAnchor id="revenue" active={activeAnchor === "revenue"}>
-            <RevenueLens data={data} onOpen={setOpenDraft} />
-          </TourAnchor>
+          <CashFlowLens data={data} currency={currency} onOpen={setOpenDraft} />
+          <RevenueLens data={data} currency={currency} onOpen={setOpenDraft} />
         </div>
 
-        <TourAnchor id="agents" active={activeAnchor === "agents"}>
-          <AgentsBand
-            drafts={data.drafts}
-            executions={executions}
-            onOpen={setOpenDraft}
-          />
-        </TourAnchor>
+        <AgentsBand
+          currency={currency}
+          drafts={data.drafts}
+          executions={executions}
+          communications={communications}
+          onOpen={setOpenDraft}
+        />
 
-        <TourAnchor id="audit" active={activeAnchor === "audit"}>
-          <AuditRail
-            audit={data.audit}
-            executions={executions}
-            drafts={data.drafts}
-          />
-        </TourAnchor>
-
-        <footer className="pt-6 pb-10 text-center text-xs text-muted-foreground">
-          UpFlow · deterministic financial logic + agentic recommendations ·
-          {data.snapshot.mode === "live" ? "live Xero data" : "fallback dataset"}
-        </footer>
+        <AuditRail
+          currency={currency}
+          audit={data.audit}
+          drafts={data.drafts}
+          executions={executions}
+          communications={communications}
+        />
       </main>
 
       <ApprovalDrawer
+        currency={currency}
+        health={health ?? null}
         draft={openDraft}
-        execution={
-          openDraft ? executions.find((e) => e.draftId === openDraft.id) ?? null : null
-        }
+        execution={openDraft ? executions.find((item) => item.draftId === openDraft.id) ?? null : null}
+        communication={openDraft ? communications.find((item) => item.draftId === openDraft.id) ?? null : null}
         onClose={() => setOpenDraft(null)}
         onSimulate={handleSimulate}
-      />
-
-      <DemoTour
-
-        step={tourStep}
-        onNext={() =>
-          setTourStep((s) =>
-            s === null ? null : s + 1 >= TOUR_STEPS.length ? null : s + 1,
-          )
-        }
-        onPrev={() => setTourStep((s) => (s === null || s === 0 ? s : s - 1))}
-        onClose={() => setTourStep(null)}
+        onSendEmail={handleSendEmail}
+        onPlaceCall={handlePlaceCall}
       />
     </div>
   );
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// Header
 
 function Header({
   orgName,
@@ -256,7 +239,6 @@ function Header({
   onConnectXero,
   onRefresh,
   onReset,
-  onStartTour,
 }: {
   orgName: string;
   mode: "live" | "fallback";
@@ -267,55 +249,32 @@ function Header({
   onConnectXero: () => void;
   onRefresh: () => void;
   onReset: () => void;
-  onStartTour: () => void;
 }) {
-
   return (
     <header className="border-b hairline bg-surface/60 backdrop-blur">
-      <div className="mx-auto grid max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 sm:flex sm:flex-wrap sm:justify-between sm:px-6">
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground overflow-hidden shadow-sm">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M7 19H14M10.5 19V11.5C10.5 8.5 12 7 14.5 7"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M6.5 13H18M18 13L14.75 9.75M18 13L14.75 16.25"
-                stroke="var(--accent)"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
+          <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+            <Landmark className="size-5" />
           </div>
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-sans text-lg font-semibold">UpFlow</span>
-            </div>
-
+            <div className="font-sans text-lg font-semibold">UpFlow</div>
             <div className="truncate text-sm text-muted-foreground">
-              Connected to <span className="text-foreground">{orgName}</span> via Xero ·
-              last sync {timeAgo(lastSyncAt)}
+              Connected to <span className="text-foreground">{orgName}</span> via Xero · last sync {timeAgo(lastSyncAt)}
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+
+        <div className="flex flex-wrap items-center gap-2">
           <Badge
             variant="outline"
             className={cn(
               "gap-1.5 border-hairline",
-              mode === "live"
-                ? "border-positive/30 bg-positive/10 text-positive"
-                : "text-warning",
+              mode === "live" ? "border-positive/30 bg-positive/10 text-positive" : "text-warning",
             )}
           >
             <CircleDot className="size-3" />
-            {mode === "live" ? "Live from Xero" : "Demo Dataset"}
+            {mode === "live" ? "Live from Xero" : "Fallback dataset"}
           </Badge>
           {mode === "fallback" && xeroConfigured && (
             <Button size="sm" onClick={onConnectXero} disabled={connectingXero}>
@@ -324,33 +283,14 @@ function Header({
             </Button>
           )}
           {mode === "fallback" && !xeroConfigured && (
-            <span className="text-xs text-muted-foreground">
-              Add Xero credentials to .env
-            </span>
+            <span className="text-xs text-muted-foreground">Add Xero credentials to `.env`</span>
           )}
-          <Button size="sm" onClick={onStartTour}>
-            <Play className="size-3.5" />
-            Start demo
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRefresh}
-            disabled={isFetching}
-            className="text-muted-foreground"
-          >
+          <Button variant="ghost" size="sm" onClick={onRefresh} disabled={isFetching}>
             <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
-            <span className="sr-only sm:not-sr-only">Refresh</span>
+            Refresh
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onReset}
-            className="text-muted-foreground"
-          >
-
-            <RefreshCw className="size-3.5" />
-            <span className="sr-only sm:not-sr-only">Reset</span>
+          <Button variant="ghost" size="sm" onClick={onReset}>
+            Reset
           </Button>
         </div>
       </div>
@@ -358,80 +298,79 @@ function Header({
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// KPI strip
-
 function KpiStrip({
+  currency,
   mode,
   currentCash,
-  projectedShortfall,
-  baselineShortfall,
+  projectedGap,
+  baselineGap,
   overdueReceivables,
   opportunityTotal,
   executedTotal,
 }: {
+  currency: string;
   mode: "live" | "fallback";
   currentCash: number;
-  projectedShortfall: number;
-  baselineShortfall: number;
+  projectedGap: number;
+  baselineGap: number;
   overdueReceivables: number;
   opportunityTotal: number;
   executedTotal: number;
 }) {
-  const gapDelta = projectedShortfall - baselineShortfall;
+  const money = (value: number, opts?: { signed?: boolean; compact?: boolean }) =>
+    formatMoney(currency, value, opts);
+
   return (
-    <div className="rounded-[calc(var(--radius-2xl)+6px)] border-2 border-accent bg-accent/[0.06] p-1">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-3 pb-2">
+    <section className="rounded-[calc(var(--radius-2xl)+6px)] border-2 border-accent bg-accent/[0.06] p-1">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-2 pt-3">
         <div className="flex items-center gap-2.5">
           <span className="relative flex size-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
             <span className="relative inline-flex size-2 rounded-full bg-accent" />
           </span>
-          <h2 className="font-serif text-xl leading-none tracking-tight text-foreground">
-            Your four key numbers
-          </h2>
+          <h2 className="font-serif text-xl leading-none tracking-tight text-foreground">Your four key numbers</h2>
         </div>
         <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-          {mode === "live" ? "Live from Xero" : "Demo dataset"}
+          {mode === "live" ? "Live from Xero" : "Fallback mode"}
         </span>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Current cash"
-          value={gbp(currentCash)}
+          value={money(currentCash)}
           hint="Across connected Xero bank feeds"
           icon={<Landmark className="size-4" />}
-          trend={executedTotal > 0 ? { value: gbp(executedTotal, { signed: true }), positive: true } : undefined}
+          trend={executedTotal > 0 ? { value: money(executedTotal, { signed: true }), positive: true } : undefined}
         />
         <KpiCard
-          label="Projected 30-day gap"
-          value={gbp(projectedShortfall)}
-          hint="Inflows − outflows over horizon"
+          label="Projected 30-day position"
+          value={money(projectedGap)}
+          hint="Inflows minus outflows over horizon"
           icon={<TrendingDown className="size-4" />}
-          tone={projectedShortfall < 0 ? "critical" : "positive"}
+          tone={projectedGap < 0 ? "critical" : "positive"}
           trend={
-            gapDelta !== 0
-              ? { value: gbp(gapDelta, { signed: true }), positive: gapDelta > 0 }
+            projectedGap !== baselineGap
+              ? { value: money(projectedGap - baselineGap, { signed: true }), positive: projectedGap > baselineGap }
               : undefined
           }
         />
         <KpiCard
           label="Overdue receivables"
-          value={gbp(overdueReceivables)}
-          hint="Ranked at-risk in Cash Flow Lens"
+          value={money(overdueReceivables)}
+          hint="Ranked at risk in Cash Flow Lens"
           icon={<AlertTriangle className="size-4" />}
           tone="warning"
         />
         <KpiCard
           label="Revenue opportunities"
-          value={gbp(opportunityTotal)}
-          hint="Lapsed + repeat + upsell potential"
+          value={money(opportunityTotal)}
+          hint="Lapsed and repeat-buyer potential"
           icon={<TrendingUp className="size-4" />}
           tone="positive"
         />
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -450,36 +389,27 @@ function KpiCard({
   tone?: "positive" | "warning" | "critical";
   trend?: { value: string; positive: boolean };
 }) {
-  const toneClass =
-    tone === "critical"
-      ? "text-critical"
-      : tone === "warning"
-        ? "text-warning"
-        : tone === "positive"
-          ? "text-positive"
-          : "text-foreground";
   return (
-    <div
-      className="panel p-5"
-      style={{ boxShadow: "var(--shadow-elevated)" }}
-    >
+    <div className="panel p-5" style={{ boxShadow: "var(--shadow-elevated)" }}>
       <div className="flex items-center justify-between text-sm uppercase tracking-wider text-muted-foreground">
         <span>{label}</span>
         <span className="text-muted-foreground/70">{icon}</span>
       </div>
-      <div className={cn("numeric mt-3 text-2xl", toneClass)}>{value}</div>
+      <div
+        className={cn(
+          "numeric mt-3 text-2xl",
+          tone === "critical" && "text-critical",
+          tone === "warning" && "text-warning",
+          tone === "positive" && "text-positive",
+        )}
+      >
+        {value}
+      </div>
       <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
         <span>{hint}</span>
         {trend && (
-          <span
-            className={cn(
-              "flex items-center gap-1 numeric",
-              trend.positive ? "text-positive" : "text-critical",
-            )}
-          >
-            <ArrowUpRight
-              className={cn("size-3.5", !trend.positive && "rotate-90")}
-            />
+          <span className={cn("flex items-center gap-1 numeric", trend.positive ? "text-positive" : "text-critical")}>
+            <ArrowUpRight className={cn("size-3.5", !trend.positive && "rotate-90")} />
             {trend.value}
           </span>
         )}
@@ -488,58 +418,49 @@ function KpiCard({
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Cash Flow Lens
-
 function CashFlowLens({
   data,
+  currency,
   onOpen,
 }: {
-  data: Awaited<ReturnType<typeof fetchControlRoom>>;
-  onOpen: (d: NegotiationDraft) => void;
+  data: ControlRoomData;
+  currency: string;
+  onOpen: (draft: NegotiationDraft) => void;
 }) {
-  const draftByInvoice = useMemo(() => {
-    const m = new Map<string, NegotiationDraft>();
-    data.drafts.forEach((d) => m.set(d.targetName, d));
-    return m;
+  const money = (value: number, opts?: { signed?: boolean; compact?: boolean }) =>
+    formatMoney(currency, value, opts);
+  const draftByTarget = useMemo(() => {
+    const map = new Map<string, NegotiationDraft>();
+    data.drafts.forEach((draft) => map.set(draft.targetName, draft));
+    return map;
   }, [data.drafts]);
 
   return (
     <section className="panel p-6">
-      <LensHeader
-        icon={<Activity className="size-4" />}
-        title="Cash Flow Lens"
-        subtitle="Deterministic liquidity signals from Xero"
-      />
+      <LensHeader icon={<Activity className="size-4" />} title="Cash Flow Lens" subtitle="Deterministic liquidity signals from Xero" />
 
       <div className="mt-5 grid grid-cols-3 gap-3">
         <MetricTile label="DSO" value={`${data.liquidity.dso.toFixed(1)}d`} hint="Days sales outstanding" />
         <MetricTile label="DPO" value={`${data.liquidity.dpo.toFixed(1)}d`} hint="Days payables outstanding" />
-        <MetricTile
-          label="CCC"
-          value={`${data.liquidity.ccc.toFixed(1)}d`}
-          hint="Cash conversion cycle"
-          tone={data.liquidity.ccc > 10 ? "warning" : "positive"}
-        />
+        <MetricTile label="CCC" value={`${data.liquidity.ccc.toFixed(1)}d`} hint="Cash conversion cycle" tone={data.liquidity.ccc > 10 ? "warning" : "positive"} />
       </div>
 
       <div className="mt-6">
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="text-sm font-medium">30-day cash projection</div>
-            <div className="mt-0.5 text-xs text-muted-foreground">
-              Daily inflows, outflows and running balance
-            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground">Daily inflows, outflows and running balance</div>
           </div>
           <div className="flex items-center gap-2">
             <div className="rounded-full border hairline bg-positive/10 px-2.5 py-1 text-sm numeric text-positive">
-              + {gbp(data.liquidity.projectedInflow)} in
+              + {money(data.liquidity.projectedInflow)} in
             </div>
             <div className="rounded-full border hairline bg-critical/10 px-2.5 py-1 text-sm numeric text-critical">
-              − {gbp(data.liquidity.projectedOutflow)} out
+              - {money(data.liquidity.projectedOutflow)} out
             </div>
           </div>
         </div>
+
         <div className="h-64 rounded-2xl bg-surface-2 p-4">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data.liquidity.daily} barGap={2}>
@@ -550,88 +471,49 @@ function CashFlowLens({
                 </linearGradient>
               </defs>
               <CartesianGrid stroke="#E5E1DA" vertical={false} />
-              <XAxis
-                dataKey="day"
-                tick={{ fill: "#78716C", fontSize: 13 }}
-                axisLine={false}
-                tickLine={false}
-                minTickGap={8}
-              />
-              <YAxis
-                tick={{ fill: "#78716C", fontSize: 13 }}
-                axisLine={false}
-                tickLine={false}
-                width={52}
-                tickFormatter={(v) => `£${Math.round(v / 1000)}k`}
-              />
+              <XAxis dataKey="day" tick={{ fill: "#78716C", fontSize: 13 }} axisLine={false} tickLine={false} minTickGap={8} />
+              <YAxis tick={{ fill: "#78716C", fontSize: 13 }} axisLine={false} tickLine={false} width={72} tickFormatter={(v) => money(v, { compact: true })} />
               <Tooltip
-                contentStyle={{
-                  background: "#FFFFFF",
-                  border: "1px solid #E5E1DA",
-                  borderRadius: 12,
-                  fontSize: 13,
-                }}
+                contentStyle={{ background: "#FFFFFF", border: "1px solid #E5E1DA", borderRadius: 12, fontSize: 13 }}
                 labelStyle={{ color: "#78716C" }}
-                formatter={(v: number, name: string) => [gbp(v), name]}
-                labelFormatter={(l) => `Day ${l}`}
+                formatter={(v: number, name: string) => [money(v), name]}
+                labelFormatter={(label) => `Day ${label}`}
               />
-              <Legend
-                verticalAlign="top"
-                height={24}
-                iconType="circle"
-                wrapperStyle={{ fontSize: 12, color: "#78716C" }}
-              />
+              <Legend verticalAlign="top" height={24} iconType="circle" wrapperStyle={{ fontSize: 12, color: "#78716C" }} />
               <Bar dataKey="inflow" name="Inflow" fill="#16a34a" radius={[3, 3, 0, 0]} maxBarSize={10} />
               <Bar dataKey="outflow" name="Outflow" fill="#dc2626" radius={[3, 3, 0, 0]} maxBarSize={10} />
-              <Area
-                type="monotone"
-                dataKey="balance"
-                name="Balance"
-                stroke="#1C1917"
-                fill="url(#balance)"
-                strokeWidth={2.5}
-              />
+              <Area type="monotone" dataKey="balance" name="Balance" stroke="#1C1917" fill="url(#balance)" strokeWidth={2.5} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-
-
       <div className="mt-6">
         <div className="mb-2 flex items-center justify-between">
           <div className="text-sm font-medium">At-risk invoices</div>
-          <div className="text-sm text-muted-foreground">
-            {data.atRiskInvoices.length} ranked by risk score
-          </div>
+          <div className="text-sm text-muted-foreground">{data.atRiskInvoices.length} ranked by risk score</div>
         </div>
         <div className="divide-y divide-hairline">
-          {data.atRiskInvoices.map((inv) => {
-            const draft = draftByInvoice.get(inv.customer);
+          {data.atRiskInvoices.map((invoice) => {
+            const draft = draftByTarget.get(invoice.customer);
             return (
               <div
-                key={inv.id}
+                key={invoice.id}
                 className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium truncate">{inv.customer}</span>
-                    <span className="text-sm text-muted-foreground numeric shrink-0">
-                      #{inv.id.slice(-4)}
-                    </span>
+                    <span className="truncate font-medium">{invoice.customer}</span>
+                    <span className="shrink-0 text-sm text-muted-foreground numeric">#{invoice.id.slice(-4)}</span>
                   </div>
-                  <div className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
-                    {inv.reason}
-                  </div>
+                  <div className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{invoice.reason}</div>
                 </div>
-                <div className="numeric text-right shrink-0">
-                  <div className="font-medium">{gbp(inv.amount)}</div>
-                  <div className="text-sm text-critical">
-                    {inv.daysOverdue}d overdue
-                  </div>
+                <div className="numeric shrink-0 text-right">
+                  <div className="font-medium">{money(invoice.amount)}</div>
+                  <div className="text-sm text-critical">{invoice.daysOverdue}d overdue</div>
                 </div>
                 <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:contents">
-                  <RiskPill score={inv.riskScore} />
+                  <RiskPill score={invoice.riskScore} />
                   <Button
                     size="sm"
                     variant={draft ? "default" : "outline"}
@@ -652,15 +534,529 @@ function CashFlowLens({
   );
 }
 
-function RiskPill({ score }: { score: number }) {
-  const tone =
-    score >= 85 ? "bg-critical/15 text-critical" :
-    score >= 65 ? "bg-warning/15 text-warning" :
-    "bg-info/15 text-info";
+function RevenueLens({
+  data,
+  currency,
+  onOpen,
+}: {
+  data: ControlRoomData;
+  currency: string;
+  onOpen: (draft: NegotiationDraft) => void;
+}) {
+  const money = (value: number, opts?: { signed?: boolean; compact?: boolean }) =>
+    formatMoney(currency, value, opts);
+  const draftByTarget = useMemo(() => {
+    const map = new Map<string, NegotiationDraft>();
+    data.drafts.forEach((draft) => map.set(draft.targetName, draft));
+    return map;
+  }, [data.drafts]);
+  const recovery =
+    data.lapsedCustomers.reduce((sum, item) => sum + item.recoveryPotential, 0) +
+    data.repeatBuyers.reduce((sum, item) => sum + item.upsellPotential, 0);
+
   return (
-    <span className={cn("numeric rounded-full px-2 py-0.5 text-sm", tone)}>
-      {score}
-    </span>
+    <section className="panel p-6">
+      <LensHeader
+        icon={<TrendingUp className="size-4" />}
+        title="Revenue Lens"
+        subtitle="Where cash can come back faster"
+        right={
+          <div className="text-right">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">Estimated recovery</div>
+            <div className="numeric text-xl text-positive">{money(recovery)}</div>
+          </div>
+        }
+      />
+
+      <div className="mt-5">
+        <SectionLabel icon={<Users className="size-3.5" />} text="Lapsed customers" />
+        <ul className="mt-2 space-y-2">
+          {data.lapsedCustomers.map((customer) => {
+            const draft = draftByTarget.get(customer.name);
+            return (
+              <li
+                key={customer.id}
+                className="flex items-center justify-between gap-3 rounded-xl border hairline bg-surface-2/60 p-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{customer.name}</div>
+                  <div className="text-sm text-muted-foreground">
+                    LTV <span className="numeric">{money(customer.ltv, { compact: true })}</span> · silent{" "}
+                    <span className="numeric">{customer.daysSilent}d</span>
+                  </div>
+                </div>
+                <div className="numeric text-sm text-positive">+{money(customer.recoveryPotential)}</div>
+                <Button
+                  size="sm"
+                  variant={draft ? "default" : "outline"}
+                  disabled={!draft}
+                  onClick={() => draft && onOpen(draft)}
+                  className={cn(!draft && "border-hairline")}
+                >
+                  {draft ? "Draft" : "No draft"}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div className="mt-5">
+        <SectionLabel icon={<Users className="size-3.5" />} text="Repeat buyers" />
+        <ul className="mt-2 space-y-2">
+          {data.repeatBuyers.map((customer) => (
+            <li
+              key={customer.id}
+              className="flex items-center justify-between gap-3 rounded-xl border hairline bg-surface-2/60 p-3"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{customer.name}</div>
+                <div className="text-sm text-muted-foreground numeric">
+                  {customer.transactions12m} orders / 12m · avg {money(customer.avgInvoice)}
+                </div>
+              </div>
+              <div className="numeric text-sm text-positive">+{money(customer.upsellPotential)}</div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function AgentsBand({
+  currency,
+  drafts,
+  executions,
+  communications,
+  onOpen,
+}: {
+  currency: string;
+  drafts: NegotiationDraft[];
+  executions: ExecutionResult[];
+  communications: CommunicationResult[];
+  onOpen: (draft: NegotiationDraft) => void;
+}) {
+  const receivables = drafts.filter((draft) => draft.agent === "receivables");
+  const payables = drafts.filter((draft) => draft.agent === "payables");
+  const executedIds = new Set(executions.map((item) => item.draftId));
+  const communicatedIds = new Set(communications.map((item) => item.draftId));
+
+  return (
+    <section className="panel p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="font-display text-lg font-semibold">Agents at work</div>
+          <div className="text-sm text-muted-foreground">Rules identify the risk. AI drafts the action. You review and simulate.</div>
+        </div>
+        <Badge variant="outline" className="gap-1.5 border-hairline">
+          <Bot className="size-3" />
+          {drafts.length} prepared drafts
+        </Badge>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <AgentColumn name="Receivables negotiator" currency={currency} drafts={receivables} executedIds={executedIds} communicatedIds={communicatedIds} onOpen={onOpen} accent="positive" />
+        <AgentColumn name="Payables negotiator" currency={currency} drafts={payables} executedIds={executedIds} communicatedIds={communicatedIds} onOpen={onOpen} accent="info" />
+      </div>
+    </section>
+  );
+}
+
+function AgentColumn({
+  name,
+  currency,
+  drafts,
+  executedIds,
+  communicatedIds,
+  onOpen,
+  accent,
+}: {
+  name: string;
+  currency: string;
+  drafts: NegotiationDraft[];
+  executedIds: Set<string>;
+  communicatedIds: Set<string>;
+  onOpen: (draft: NegotiationDraft) => void;
+  accent: "positive" | "info";
+}) {
+  const money = (value: number, opts?: { signed?: boolean; compact?: boolean }) =>
+    formatMoney(currency, value, opts);
+
+  return (
+    <div className="rounded-2xl border hairline bg-surface-2/60 p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "grid size-7 place-items-center rounded-md",
+              accent === "positive" ? "bg-positive/15 text-positive" : "bg-info/15 text-info",
+            )}
+          >
+            <Bot className="size-4" />
+          </span>
+          <div className="font-medium">{name}</div>
+        </div>
+        <div className="numeric text-sm text-foreground">{drafts.length} queued</div>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {drafts.map((draft) => (
+          <button
+            key={draft.id}
+            onClick={() => onOpen(draft)}
+            className="group flex w-full items-start justify-between gap-3 rounded-xl border hairline bg-surface p-3 text-left transition-colors hover:border-primary/40"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <UrgencyDot urgency={draft.urgency} />
+                <span className="truncate font-medium">{draft.targetName}</span>
+                {executedIds.has(draft.id) && (
+                  <Badge className="h-5 gap-1 border-0 bg-positive/15 text-positive">
+                    <CheckCircle2 className="size-3" />
+                    Simulated
+                  </Badge>
+                )}
+                {communicatedIds.has(draft.id) && (
+                  <Badge className="h-5 border-0 bg-info/15 text-info">Live action</Badge>
+                )}
+              </div>
+              <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">{draft.reason}</div>
+              <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="numeric text-sm text-positive">+{money(draft.expectedCashImpact)} in ~{draft.hoursToImpact}h</span>
+                <span>·</span>
+                <span>confidence {pct(draft.confidence)}</span>
+              </div>
+            </div>
+            <ChevronRight className="mt-1 size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AuditRail({
+  currency,
+  audit,
+  drafts,
+  executions,
+  communications,
+}: {
+  currency: string;
+  audit: AuditEntry[];
+  drafts: NegotiationDraft[];
+  executions: ExecutionResult[];
+  communications: CommunicationResult[];
+}) {
+  const money = (value: number, opts?: { signed?: boolean; compact?: boolean }) =>
+    formatMoney(currency, value, opts);
+
+  const entries = [
+    ...communications.map((communication) => {
+      const draft = drafts.find((item) => item.id === communication.draftId);
+      return {
+        id: `${communication.channel}-${communication.draftId}`,
+        at: new Date().toISOString(),
+        actor: communication.channel === "call" ? "Collections Voice" : "Collections Email",
+        action: communication.channel === "call" ? "Queued outbound call" : "Sent reminder email",
+        target: `${communication.recipientName} · ${
+          communication.channel === "call"
+            ? communication.recipientPhone ?? "no phone"
+            : communication.recipientEmail ?? "no email"
+        }`,
+        rationale: communication.message,
+        humanInLoop: true,
+      };
+    }),
+    ...executions.map((execution) => {
+      const draft = drafts.find((item) => item.id === execution.draftId);
+      return {
+        id: `execution-${execution.draftId}`,
+        at: execution.executedAt,
+        actor:
+          draft?.agent === "payables"
+            ? "Payables Agent"
+            : draft?.agent === "reengagement"
+              ? "Revenue Agent"
+              : "Receivables Agent",
+        action: "Simulated execution",
+        target: `${draft?.targetName ?? execution.draftId} · ${money(execution.cashImpact, { signed: true })}`,
+        rationale: execution.note,
+        humanInLoop: true,
+      };
+    }),
+    ...audit,
+  ];
+
+  return (
+    <section className="panel p-6">
+      <div>
+        <div className="font-display text-lg font-semibold">Audit trail</div>
+        <div className="text-sm text-muted-foreground">Every recommendation keeps its rationale visible.</div>
+      </div>
+
+      <ul className="mt-4 divide-y divide-hairline">
+        {entries.map((entry) => (
+          <li key={entry.id} className="flex items-start gap-4 py-3 text-sm">
+            <div className="numeric w-16 shrink-0 text-sm text-muted-foreground">{timeAgo(entry.at)}</div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">{entry.actor}</span>
+                <span className="text-muted-foreground">{entry.action}</span>
+                <span className="text-foreground">{entry.target}</span>
+                {entry.humanInLoop && (
+                  <Badge variant="outline" className="h-5 border-hairline text-xs">
+                    Human in loop
+                  </Badge>
+                )}
+              </div>
+              <div className="mt-0.5 text-sm text-muted-foreground">{entry.rationale}</div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ApprovalDrawer({
+  currency,
+  health,
+  draft,
+  execution,
+  communication,
+  onClose,
+  onSimulate,
+  onSendEmail,
+  onPlaceCall,
+}: {
+  currency: string;
+  health: Awaited<ReturnType<typeof fetchHealth>> | null;
+  draft: NegotiationDraft | null;
+  execution: ExecutionResult | null;
+  communication: CommunicationResult | null;
+  onClose: () => void;
+  onSimulate: (draft: NegotiationDraft) => void;
+  onSendEmail: (draft: NegotiationDraft) => Promise<void>;
+  onPlaceCall: (draft: NegotiationDraft) => Promise<void>;
+}) {
+  const money = (value: number, opts?: { signed?: boolean; compact?: boolean }) =>
+    formatMoney(currency, value, opts);
+  const [body, setBody] = useState("");
+  const [busyAction, setBusyAction] = useState<"email" | "call" | null>(null);
+
+  useEffect(() => {
+    if (draft) {
+      setBody(draft.body);
+    }
+  }, [draft]);
+
+  const daysOverdue = draft?.daysOverdue ?? 0;
+  const canSendEmail = Boolean(
+    draft &&
+      draft.agent === "receivables" &&
+      typeof draft.daysOverdue === "number" &&
+      draft.daysOverdue < 14 &&
+      draft.contactEmail
+  );
+  const canPlaceCall = Boolean(
+    draft &&
+      draft.agent === "receivables" &&
+      typeof draft.daysOverdue === "number" &&
+      draft.daysOverdue >= 15 &&
+      draft.contactPhone
+  );
+
+  const handleEmail = async () => {
+    if (!draft) return;
+    setBusyAction("email");
+    try {
+      await onSendEmail(draft);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Email send failed");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleCall = async () => {
+    if (!draft) return;
+    setBusyAction("call");
+    try {
+      await onPlaceCall(draft);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Call queue failed");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  return (
+    <Sheet open={!!draft} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="right" className="flex w-full flex-col border-l hairline bg-surface sm:max-w-lg">
+        {draft && (
+          <>
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2 font-display">
+                <UrgencyDot urgency={draft.urgency} />
+                {draft.agent === "payables" ? "Extend" : draft.agent === "reengagement" ? "Re-engage" : "Collect"} · {draft.targetName}
+              </SheetTitle>
+              <SheetDescription className="text-muted-foreground">{draft.proposedAction}</SheetDescription>
+            </SheetHeader>
+
+            <ScrollArea className="-mx-6 flex-1 px-6">
+              <div className="space-y-5 py-4">
+                <div className="grid grid-cols-3 gap-2">
+                  <StatBlock label="Expected cash" value={money(draft.expectedCashImpact, { signed: true })} tone="positive" />
+                  <StatBlock label="Impact ETA" value={`~${draft.hoursToImpact}h`} />
+                  <StatBlock label="Confidence" value={pct(draft.confidence)} />
+                </div>
+
+                <div className="rounded-xl border hairline bg-surface-2/60 p-3 text-sm">
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground">Client contact</div>
+                  <div className="mt-2 space-y-1">
+                    <div>
+                      <span className="text-muted-foreground">Email: </span>
+                      <span>{draft.contactEmail ?? "Not available in Xero"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Phone: </span>
+                      <span>{draft.contactPhone ?? "Not available in Xero"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Overdue: </span>
+                      <span>{daysOverdue} days</span>
+                    </div>
+                  </div>
+                </div>
+
+                {draft.agent === "receivables" && (
+                  <div className="rounded-xl border hairline bg-surface-2/60 p-3 text-sm">
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground">Communication rule</div>
+                    <div className="mt-2 text-sm">
+                      {daysOverdue >= 15
+                        ? "15+ days overdue: queue a polite outbound reminder call."
+                        : "Under 14 days overdue: send a polite reminder email."}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleEmail}
+                        disabled={!canSendEmail || busyAction !== null || !health?.emailConfigured}
+                        className="border-hairline"
+                      >
+                        {busyAction === "email" ? "Sending..." : "Send reminder email"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCall}
+                        disabled={!canPlaceCall || busyAction !== null || !health?.voiceConfigured}
+                        className="border-hairline"
+                      >
+                        {busyAction === "call" ? "Calling..." : "Place reminder call"}
+                      </Button>
+                    </div>
+                    {!health?.emailConfigured && !health?.voiceConfigured && (
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        Add SMTP and Twilio credentials in `.env` to enable live outreach.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground">Rationale</div>
+                  <p className="mt-1 text-sm">{draft.reason}</p>
+                </div>
+
+                <Separator className="bg-hairline" />
+
+                <div>
+                  <div className="mb-1 flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground">
+                    <span>Draft message</span>
+                    <span>Subject: {draft.subject}</span>
+                  </div>
+                  <Textarea
+                    value={body}
+                    onChange={(event) => setBody(event.target.value)}
+                    rows={10}
+                    className="border-hairline bg-surface-2 font-sans text-sm"
+                  />
+                </div>
+
+                {execution && (
+                  <div className="rounded-md border border-positive/40 bg-positive/10 p-3 text-sm">
+                    <div className="flex items-center gap-2 font-medium text-positive">
+                      <CheckCircle2 className="size-4" />
+                      Simulation recorded
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">{execution.note}</div>
+                    <div className="mt-2 numeric text-xs">
+                      Updated 30-day position: <span className="text-foreground">{money(execution.newProjectedShortfall)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {communication && (
+                  <div className="rounded-md border border-info/40 bg-info/10 p-3 text-sm">
+                    <div className="font-medium text-info">
+                      {communication.channel === "call" ? "Call queued" : "Email sent"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">{communication.message}</div>
+                    {communication.providerId && (
+                      <div className="mt-2 text-xs text-muted-foreground">Provider ref: {communication.providerId}</div>
+                    )}
+                    {communication.scriptPreview && (
+                      <div className="mt-2 text-xs text-muted-foreground">{communication.scriptPreview}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+
+            <SheetFooter className="flex-row justify-between border-t hairline pt-4">
+              <Button variant="ghost" onClick={onClose}>
+                Close
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => onSimulate(draft)} className="border-hairline">
+                  Simulate impact
+                </Button>
+                <Button onClick={() => onSimulate(draft)}>Approve for demo</Button>
+              </div>
+            </SheetFooter>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function LensHeader({
+  icon,
+  title,
+  subtitle,
+  right,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start gap-3">
+        <div className="grid size-8 place-items-center rounded-xl bg-accent text-accent-foreground">{icon}</div>
+        <div>
+          <div className="font-display text-lg font-semibold">{title}</div>
+          <div className="text-sm text-muted-foreground">{subtitle}</div>
+        </div>
+      </div>
+      {right}
+    </div>
   );
 }
 
@@ -693,102 +1089,6 @@ function MetricTile({
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Revenue Lens
-
-function RevenueLens({
-  data,
-  onOpen,
-}: {
-  data: Awaited<ReturnType<typeof fetchControlRoom>>;
-  onOpen: (d: NegotiationDraft) => void;
-}) {
-  const draftByCustomer = useMemo(() => {
-    const m = new Map<string, NegotiationDraft>();
-    data.drafts.forEach((d) => m.set(d.targetName, d));
-    return m;
-  }, [data.drafts]);
-
-  const recovery =
-    data.lapsedCustomers.reduce((s, c) => s + c.recoveryPotential, 0) +
-    data.repeatBuyers.reduce((s, c) => s + c.upsellPotential, 0);
-
-  return (
-    <section className="panel p-6">
-      <LensHeader
-        icon={<TrendingUp className="size-4" />}
-        title="Revenue Lens"
-        subtitle="Where cash can come back faster"
-        right={
-          <div className="text-right">
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">
-              Est. recovery
-            </div>
-            <div className="numeric text-xl text-positive">{gbp(recovery)}</div>
-          </div>
-        }
-      />
-
-      <div className="mt-5">
-        <SectionLabel icon={<Users className="size-3.5" />} text="Lapsed customers" />
-        <ul className="mt-2 space-y-2">
-          {data.lapsedCustomers.map((c) => {
-            const draft = draftByCustomer.get(c.name);
-            return (
-              <li
-                key={c.id}
-                className="flex items-center justify-between gap-3 rounded-xl border hairline bg-surface-2/60 p-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium truncate">{c.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    LTV <span className="numeric">{gbp(c.ltv, { compact: true })}</span> ·
-                    silent <span className="numeric">{c.daysSilent}d</span>
-                  </div>
-                </div>
-                <div className="numeric text-sm text-positive">
-                  +{gbp(c.recoveryPotential)}
-                </div>
-                <Button
-                  size="sm"
-                  variant={draft ? "default" : "outline"}
-                  disabled={!draft}
-                  onClick={() => draft && onOpen(draft)}
-                  className={cn(!draft && "border-hairline")}
-                >
-                  {draft ? "Draft" : "—"}
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-
-      <div className="mt-5">
-        <SectionLabel icon={<Users className="size-3.5" />} text="Repeat buyers" />
-        <ul className="mt-2 space-y-2">
-          {data.repeatBuyers.map((c) => (
-            <li
-              key={c.id}
-              className="flex items-center justify-between gap-3 rounded-xl border hairline bg-surface-2/60 p-3"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="font-medium truncate">{c.name}</div>
-                <div className="text-sm text-muted-foreground numeric">
-                  {c.transactions12m} orders / 12m · avg {gbp(c.avgInvoice)}
-                </div>
-              </div>
-              <div className="numeric text-sm text-positive">
-                +{gbp(c.upsellPotential)}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
 function SectionLabel({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
     <div className="flex items-center gap-1.5 text-sm uppercase tracking-wider text-muted-foreground">
@@ -798,327 +1098,21 @@ function SectionLabel({ icon, text }: { icon: React.ReactNode; text: string }) {
   );
 }
 
-function LensHeader({
-  icon,
-  title,
-  subtitle,
-  right,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  right?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex items-start gap-3">
-        <div className="grid size-8 place-items-center rounded-xl bg-accent text-accent-foreground">
-          {icon}
-        </div>
-        <div>
-          <div className="font-display text-lg font-semibold">{title}</div>
-          <div className="text-sm text-muted-foreground">{subtitle}</div>
-        </div>
-      </div>
-      {right}
-    </div>
-  );
+function RiskPill({ score }: { score: number }) {
+  const tone = score >= 85 ? "bg-critical/15 text-critical" : score >= 65 ? "bg-warning/15 text-warning" : "bg-info/15 text-info";
+  return <span className={cn("numeric rounded-full px-2 py-0.5 text-sm", tone)}>{score}</span>;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Agents band
-
-function AgentsBand({
-  drafts,
-  executions,
-  onOpen,
-}: {
-  drafts: NegotiationDraft[];
-  executions: ExecutionResult[];
-  onOpen: (d: NegotiationDraft) => void;
-}) {
-  const receivables = drafts.filter((d) => d.agent === "receivables");
-  const payables = drafts.filter((d) => d.agent === "payables");
-  const executedIds = new Set(executions.map((e) => e.draftId));
-
-  return (
-    <section className="panel p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="font-display text-lg font-semibold">Agents at work</div>
-          <div className="text-sm text-muted-foreground">
-            Rules identify the risk · AI drafts the action · you approve
-          </div>
-        </div>
-        <Badge variant="outline" className="border-hairline gap-1.5">
-          <Bot className="size-3" />
-          {drafts.length} pending drafts
-        </Badge>
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <AgentColumn
-          name="Receivables Negotiator"
-          drafts={receivables}
-          executedIds={executedIds}
-          onOpen={onOpen}
-          accent="positive"
-        />
-        <AgentColumn
-          name="Payables Negotiator"
-          drafts={payables}
-          executedIds={executedIds}
-          onOpen={onOpen}
-          accent="info"
-        />
-      </div>
-    </section>
-  );
-}
-
-function AgentColumn({
-  name,
-  drafts,
-  executedIds,
-  onOpen,
-  accent,
-}: {
-  name: string;
-  drafts: NegotiationDraft[];
-  executedIds: Set<string>;
-  onOpen: (d: NegotiationDraft) => void;
-  accent: "positive" | "info";
-}) {
-  return (
-    <div className="rounded-2xl border hairline bg-surface-2/60 p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "grid size-7 place-items-center rounded-md",
-              accent === "positive" ? "bg-positive/15 text-positive" : "bg-info/15 text-info",
-            )}
-          >
-            <Bot className="size-4" />
-          </span>
-          <div className="font-medium">{name}</div>
-        </div>
-        <div className="text-sm text-foreground numeric">
-          {drafts.length} queued
-        </div>
-      </div>
-      <div className="mt-3 space-y-2">
-        {drafts.map((d) => (
-          <button
-            key={d.id}
-            onClick={() => onOpen(d)}
-            className="group flex w-full items-start justify-between gap-3 rounded-xl border hairline bg-surface p-3 text-left transition-colors hover:border-primary/40"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <UrgencyDot u={d.urgency} />
-                <span className="font-medium truncate">{d.targetName}</span>
-                {executedIds.has(d.id) && (
-                  <Badge className="bg-positive/15 text-positive border-0 gap-1 h-5">
-                    <CheckCircle2 className="size-3" /> Simulated
-                  </Badge>
-                )}
-              </div>
-              <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                {d.reason}
-              </div>
-              <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="numeric text-sm text-positive">
-                  +{gbp(d.expectedCashImpact)} in ~{d.hoursToImpact}h
-                </span>
-                <span>·</span>
-                <span>confidence {pct(d.confidence)}</span>
-              </div>
-            </div>
-            <ChevronRight className="mt-1 size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function UrgencyDot({ u }: { u: Urgency }) {
-  const c =
-    u === "critical" ? "bg-critical" :
-    u === "high" ? "bg-warning" :
-    u === "medium" ? "bg-info" : "bg-muted-foreground";
-  return <span className={cn("size-2 rounded-full", c)} />;
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Audit rail
-
-function AuditRail({
-  audit,
-  executions,
-  drafts,
-}: {
-  audit: Awaited<ReturnType<typeof fetchControlRoom>>["audit"];
-  executions: ExecutionResult[];
-  drafts: NegotiationDraft[];
-}) {
-  const entries = [
-    ...executions.map((e) => {
-      const d = drafts.find((x) => x.id === e.draftId);
-      return {
-        id: `exec-${e.draftId}`,
-        at: e.executedAt,
-        actor: d?.agent === "receivables" ? "Receivables Agent" : "Payables Agent",
-        action: "Simulated execution",
-        target: `${d?.targetName ?? ""} · ${gbp(e.cashImpact, { signed: true })}`,
-        rationale: e.note,
-        humanInLoop: true,
-      };
-    }),
-    ...audit,
-  ];
-
-  return (
-    <section className="panel p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="font-display text-lg font-semibold">Audit trail</div>
-          <div className="text-sm text-muted-foreground">
-            Every recommendation has a rationale and a human sign-off
-          </div>
-        </div>
-      </div>
-      <ul className="mt-4 divide-y divide-hairline">
-        {entries.map((e) => (
-          <li key={e.id} className="flex items-start gap-4 py-3 text-sm">
-            <div className="numeric w-16 shrink-0 text-sm text-muted-foreground">
-              {timeAgo(e.at)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">{e.actor}</span>
-                <span className="text-muted-foreground">{e.action}</span>
-                <span className="text-foreground">{e.target}</span>
-                {e.humanInLoop && (
-                  <Badge variant="outline" className="border-hairline text-xs h-5">
-                    Human in loop
-                  </Badge>
-                )}
-              </div>
-              <div className="mt-0.5 text-sm text-muted-foreground">{e.rationale}</div>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Approval drawer
-
-function ApprovalDrawer({
-  draft,
-  execution,
-  onClose,
-  onSimulate,
-}: {
-  draft: NegotiationDraft | null;
-  execution: ExecutionResult | null;
-  onClose: () => void;
-  onSimulate: (d: NegotiationDraft) => void;
-}) {
-  const [body, setBody] = useState("");
-  const activeId = draft?.id;
-  useEffect(() => {
-    if (draft) setBody(draft.body);
-  }, [activeId, draft]);
-
-  return (
-    <Sheet open={!!draft} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-lg bg-surface border-l hairline flex flex-col"
-      >
-        {draft && (
-          <>
-            <SheetHeader>
-              <SheetTitle className="font-display flex items-center gap-2">
-                <UrgencyDot u={draft.urgency} />
-                {draft.agent === "receivables" ? "Collect" : "Extend"} · {draft.targetName}
-              </SheetTitle>
-              <SheetDescription className="text-muted-foreground">
-                {draft.proposedAction}
-              </SheetDescription>
-            </SheetHeader>
-
-            <ScrollArea className="-mx-6 flex-1 px-6">
-              <div className="space-y-5 py-4">
-                <div className="grid grid-cols-3 gap-2">
-                  <StatBlock label="Expected cash" value={gbp(draft.expectedCashImpact, { signed: true })} tone="positive" />
-                  <StatBlock label="Impact ETA" value={`~${draft.hoursToImpact}h`} />
-                  <StatBlock label="Confidence" value={pct(draft.confidence)} />
-                </div>
-
-                <div>
-                  <div className="text-xs uppercase tracking-wider text-muted-foreground">Rationale</div>
-                  <p className="mt-1 text-sm">{draft.reason}</p>
-                </div>
-
-                <Separator className="bg-hairline" />
-
-                <div>
-                  <div className="mb-1 flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground">
-                    <span>Draft message</span>
-                    <span>Subject: {draft.subject}</span>
-                  </div>
-                  <Textarea
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    rows={10}
-                    className="bg-surface-2 border-hairline font-sans text-sm"
-                  />
-                </div>
-
-                {execution && (
-                  <div className="rounded-md border border-positive/40 bg-positive/10 p-3 text-sm">
-                    <div className="flex items-center gap-2 font-medium text-positive">
-                      <CheckCircle2 className="size-4" />
-                      Simulated
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">{execution.note}</div>
-                    <div className="mt-2 numeric text-xs">
-                      New projected 30-day gap:{" "}
-                      <span className="text-foreground">
-                        {gbp(execution.newProjectedShortfall)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-
-            <SheetFooter className="flex-row justify-between border-t hairline pt-4">
-              <Button variant="ghost" onClick={onClose}>
-                Close
-              </Button>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => onSimulate(draft)}
-                  className="border-hairline"
-                >
-                  Simulate execution
-                </Button>
-                <Button onClick={() => onSimulate(draft)}>Approve & send</Button>
-              </div>
-            </SheetFooter>
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
-  );
+function UrgencyDot({ urgency }: { urgency: Urgency }) {
+  const tone =
+    urgency === "critical"
+      ? "bg-critical"
+      : urgency === "high"
+        ? "bg-warning"
+        : urgency === "medium"
+          ? "bg-info"
+          : "bg-muted-foreground";
+  return <span className={cn("size-2 rounded-full", tone)} />;
 }
 
 function StatBlock({
@@ -1133,153 +1127,7 @@ function StatBlock({
   return (
     <div className="rounded-xl border hairline bg-surface-2/60 p-3">
       <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={cn("numeric mt-1 text-lg", tone === "positive" && "text-positive")}>
-        {value}
-      </div>
+      <div className={cn("numeric mt-1 text-lg", tone === "positive" && "text-positive")}>{value}</div>
     </div>
   );
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// Guided demo tour — walks the user through key dashboard moments.
-
-type TourAnchorId = "kpi" | "cash" | "revenue" | "agents" | "audit";
-
-interface TourStep {
-  anchor: TourAnchorId;
-  title: string;
-  body: string;
-  action?: string;
-}
-
-const TOUR_STEPS: TourStep[] = [
-  {
-    anchor: "kpi",
-    title: "The 30-second read",
-    body:
-      "Acme has £48k on hand today but is projected to run a cash gap inside 30 days. Overdue receivables are £62k — the money already exists, it's just stuck.",
-  },
-  {
-    anchor: "cash",
-    title: "Cash Flow Lens — deterministic",
-    body:
-      "DSO / DPO / CCC are computed from real Xero invoices and payments. The chart shows the projected day-14 dip when payroll and supplier bills bunch.",
-  },
-  {
-    anchor: "revenue",
-    title: "Revenue Lens — cash you already earned",
-    body:
-      "Same Xero data, different question: who used to buy and stopped? Blackwood & Sons is a 92-day-silent £84k LTV account. That's £12.8k recoverable this week.",
-  },
-  {
-    anchor: "agents",
-    title: "Agents draft the action",
-    body:
-      "Rules identified the risk. AI drafts the message — subject, body, tone, expected cash impact, confidence. Open Northwind's draft to review.",
-    action: "Open a draft →",
-  },
-  {
-    anchor: "audit",
-    title: "Approve, simulate, audit",
-    body:
-      "Every action is human-approved. Simulate shows the post-execution cash impact before it touches Xero. Every recommendation is logged with a rationale.",
-  },
-];
-
-function TourAnchor({
-  id,
-  active,
-  children,
-}: {
-  id: TourAnchorId;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      id={`tour-${id}`}
-      className={cn(
-        "scroll-mt-24 rounded-lg transition-all duration-300",
-        active && "ring-2 ring-primary ring-offset-4 ring-offset-background",
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-function DemoTour({
-  step,
-  onNext,
-  onPrev,
-  onClose,
-}: {
-  step: number | null;
-  onNext: () => void;
-  onPrev: () => void;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    if (step === null) return;
-    const el = document.getElementById(`tour-${TOUR_STEPS[step].anchor}`);
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [step]);
-
-  if (step === null) return null;
-  const s = TOUR_STEPS[step];
-  const isLast = step === TOUR_STEPS.length - 1;
-
-  return (
-    <div className="fixed inset-x-3 bottom-3 z-50 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:max-w-sm">
-      <div
-        className="panel p-4 shadow-2xl backdrop-blur"
-        style={{ boxShadow: "var(--shadow-elevated)" }}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Badge className="bg-primary/15 text-primary border-0">
-              Step {step + 1} / {TOUR_STEPS.length}
-            </Badge>
-            <span className="font-display text-sm font-semibold">{s.title}</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Close demo"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-        <p className="mt-2 text-sm text-muted-foreground">{s.body}</p>
-        {s.action && (
-          <div className="mt-2 text-xs text-primary">{s.action}</div>
-        )}
-        <div className="mt-3 flex items-center justify-between">
-          <div className="flex gap-1">
-            {TOUR_STEPS.map((_, i) => (
-              <span
-                key={i}
-                className={cn(
-                  "h-1 w-6 rounded-full",
-                  i <= step ? "bg-primary" : "bg-hairline",
-                )}
-              />
-            ))}
-          </div>
-          <div className="flex gap-2">
-            {step > 0 && (
-              <Button variant="ghost" size="sm" onClick={onPrev}>
-                Back
-              </Button>
-            )}
-            <Button size="sm" onClick={isLast ? onClose : onNext}>
-              {isLast ? "Finish" : "Next"}
-              {!isLast && <ArrowRight className="size-3.5" />}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-

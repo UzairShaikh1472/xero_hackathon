@@ -55,17 +55,20 @@ export function loadFallbackData() {
       {
         ContactID: "contact_demo_001",
         Name: "Acorn Retail",
-        EmailAddress: "finance@acornretail.example"
+        EmailAddress: "finance@acornretail.example",
+        Phones: [{ PhoneNumber: "+441234567801" }]
       },
       {
         ContactID: "contact_demo_002",
         Name: "Blue Finch Studio",
-        EmailAddress: "ops@bluefinch.example"
+        EmailAddress: "ops@bluefinch.example",
+        Phones: [{ PhoneNumber: "+441234567802" }]
       },
       {
         ContactID: "contact_demo_003",
         Name: "Office Supplies Co",
-        EmailAddress: "billing@officesupplies.example"
+        EmailAddress: "billing@officesupplies.example",
+        Phones: [{ PhoneNumber: "+441234567803" }]
       }
     ],
     payments: []

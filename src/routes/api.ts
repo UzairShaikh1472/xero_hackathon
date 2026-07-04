@@ -1,15 +1,21 @@
 import { Router } from "express";
 
+import { env } from "../lib/config/env.js";
 import {
   buildPayablesDraftResponse,
   buildReceivablesDraftResponse,
   buildReengagementQuoteResponse,
   buildSimulationExecuteResponse
 } from "../lib/services/action-service.js";
+import {
+  buildPlaceDraftCallResponse,
+  buildSendDraftEmailResponse
+} from "../lib/services/communications-service.js";
 import { buildExecutionHistoryResponse } from "../lib/services/execution-history-service.js";
 import { buildHealthResponse } from "../lib/services/health-service.js";
 import { buildInvoiceRiskResponse } from "../lib/services/invoice-risk-service.js";
 import { buildLiquidityResponse } from "../lib/services/liquidity-service.js";
+import { buildOpenPayablesResponse } from "../lib/services/payables-service.js";
 import { clearSnapshotCache, getPhaseOneSnapshot, handleOAuthCallback } from "../lib/services/phase-one-sync-service.js";
 import { buildRevenueOpportunitiesResponse } from "../lib/services/revenue-opportunities-service.js";
 import { buildSummaryResponse } from "../lib/services/summary-service.js";
@@ -57,6 +63,15 @@ apiRouter.get("/revenue-opportunities", async (_request, response, next) => {
 apiRouter.get("/invoices/at-risk", async (_request, response, next) => {
   try {
     const payload = await buildInvoiceRiskResponse();
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.get("/payables/open", async (_request, response, next) => {
+  try {
+    const payload = await buildOpenPayablesResponse();
     response.json(payload);
   } catch (error) {
     next(error);
@@ -111,7 +126,7 @@ apiRouter.get("/xero/callback", async (request, response, next) => {
     await handleOAuthCallback(code);
     clearSnapshotCache();
 
-    response.redirect("http://localhost:8080/?xero=connected");
+    response.redirect(`${env.FRONTEND_APP_URL.replace(/\/$/, "")}/?xero=connected`);
   } catch (error) {
     next(error);
   }
@@ -156,6 +171,24 @@ apiRouter.post("/agent/reengagement-quote", async (request, response, next) => {
 apiRouter.post("/simulate/execute", async (request, response, next) => {
   try {
     const payload = await buildSimulationExecuteResponse(request.body);
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.post("/communications/send-email", async (request, response, next) => {
+  try {
+    const payload = await buildSendDraftEmailResponse(request.body);
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.post("/communications/place-call", async (request, response, next) => {
+  try {
+    const payload = await buildPlaceDraftCallResponse(request.body);
     response.json(payload);
   } catch (error) {
     next(error);

@@ -9,6 +9,8 @@ const booleanFromEnv = z
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().default(3001),
+  FRONTEND_APP_URL: z.string().url().default("http://localhost:8080"),
+  PUBLIC_BASE_URL: z.string().url().default("http://localhost:3001"),
   USE_XERO_FALLBACK: booleanFromEnv.default("true"),
   XERO_STATE_SALT: z.string().default("change-me"),
   XERO_CLIENT_ID: z.string().default(""),
@@ -16,7 +18,16 @@ const envSchema = z.object({
   XERO_REDIRECT_URI: z.string().url().default("http://localhost:3001/api/xero/callback"),
   XERO_SCOPES: z.string().default(
     "openid profile email offline_access accounting.transactions accounting.contacts accounting.settings accounting.reports.read"
-  )
+  ),
+  SMTP_HOST: z.string().default(""),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_SECURE: booleanFromEnv.default("false"),
+  SMTP_USER: z.string().default(""),
+  SMTP_PASS: z.string().default(""),
+  SMTP_FROM: z.string().default(""),
+  TWILIO_ACCOUNT_SID: z.string().default(""),
+  TWILIO_AUTH_TOKEN: z.string().default(""),
+  TWILIO_FROM_NUMBER: z.string().default("")
 });
 
 export const env = envSchema.parse(process.env);
