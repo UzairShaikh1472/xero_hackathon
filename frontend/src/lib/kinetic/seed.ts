@@ -34,7 +34,7 @@ export const seedData: ControlRoomData = {
     orgName: "Acme Trading Co.",
     connectedVia: "Xero",
     lastSyncAt: iso(today),
-    mode: "demo",
+    mode: "fallback",
     currency: "GBP",
     currentCash: 48200,
     overdueReceivables: 62480,
