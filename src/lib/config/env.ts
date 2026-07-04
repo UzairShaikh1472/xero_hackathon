@@ -16,7 +16,10 @@ const envSchema = z.object({
   XERO_REDIRECT_URI: z.string().url().default("http://localhost:3001/api/xero/callback"),
   XERO_SCOPES: z.string().default(
     "openid profile email offline_access accounting.transactions accounting.contacts accounting.settings accounting.reports.read"
-  )
+  ),
+  ELEVENLABS_API_KEY: z.string().default(""),
+  ELEVENLABS_VOICE_ID: z.string().default(""),
+  ELEVENLABS_MODEL_ID: z.string().default("eleven_flash_v2_5")
 });
 
 export const env = envSchema.parse(process.env);
