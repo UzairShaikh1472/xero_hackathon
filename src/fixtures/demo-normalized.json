@@ -1,0 +1,391 @@
+{
+  "cash": 12400,
+  "asOfDate": "2026-07-04",
+  "revenueLast90Days": 87000,
+  "cogsLast90Days": 42000,
+  "contacts": [
+    {
+      "contactId": "c-aurora",
+      "contactName": "Aurora Supplies Ltd",
+      "isCustomer": true,
+      "isSupplier": false
+    },
+    {
+      "contactId": "c-bright",
+      "contactName": "Brightline Media",
+      "isCustomer": true,
+      "isSupplier": false
+    },
+    {
+      "contactId": "c-lapsed",
+      "contactName": "Lapsed Co B",
+      "isCustomer": true,
+      "isSupplier": false
+    },
+    {
+      "contactId": "c-north",
+      "contactName": "Northwind Retail",
+      "isCustomer": true,
+      "isSupplier": false
+    },
+    {
+      "contactId": "c-summit",
+      "contactName": "Summit Logistics",
+      "isCustomer": true,
+      "isSupplier": false
+    },
+    {
+      "contactId": "c-vendor-a",
+      "contactName": "Office Depot UK",
+      "isCustomer": false,
+      "isSupplier": true
+    },
+    {
+      "contactId": "c-vendor-b",
+      "contactName": "CloudHost Services",
+      "isCustomer": false,
+      "isSupplier": true
+    }
+  ],
+  "invoices": [
+    {
+      "invoiceId": "inv-aurora-8000",
+      "contactId": "c-aurora",
+      "contactName": "Aurora Supplies Ltd",
+      "amount": 8000,
+      "amountDue": 8000,
+      "dueDate": "2026-06-22",
+      "date": "2026-05-23",
+      "status": "AUTHORISED",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-bright-6200",
+      "contactId": "c-bright",
+      "contactName": "Brightline Media",
+      "amount": 6200,
+      "amountDue": 6200,
+      "dueDate": "2026-06-10",
+      "date": "2026-05-11",
+      "status": "AUTHORISED",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-north-5400",
+      "contactId": "c-north",
+      "contactName": "Northwind Retail",
+      "amount": 5400,
+      "amountDue": 5400,
+      "dueDate": "2026-06-28",
+      "date": "2026-05-29",
+      "status": "AUTHORISED",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-summit-5000",
+      "contactId": "c-summit",
+      "contactName": "Summit Logistics",
+      "amount": 5000,
+      "amountDue": 5000,
+      "dueDate": "2026-07-01",
+      "date": "2026-06-01",
+      "status": "AUTHORISED",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-rec-due-soon",
+      "contactId": "c-north",
+      "contactName": "Northwind Retail",
+      "amount": 3200,
+      "amountDue": 3200,
+      "dueDate": "2026-07-18",
+      "date": "2026-06-18",
+      "status": "AUTHORISED",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-pay-office",
+      "contactId": "c-vendor-a",
+      "contactName": "Office Depot UK",
+      "amount": 9800,
+      "amountDue": 9800,
+      "dueDate": "2026-07-12",
+      "date": "2026-06-12",
+      "status": "AUTHORISED",
+      "type": "ACCPAY"
+    },
+    {
+      "invoiceId": "inv-pay-cloud",
+      "contactId": "c-vendor-b",
+      "contactName": "CloudHost Services",
+      "amount": 7000,
+      "amountDue": 7000,
+      "dueDate": "2026-07-20",
+      "date": "2026-06-20",
+      "status": "AUTHORISED",
+      "type": "ACCPAY"
+    },
+    {
+      "invoiceId": "inv-lapsed-hist-1",
+      "contactId": "c-lapsed",
+      "contactName": "Lapsed Co B",
+      "amount": 4500,
+      "amountDue": 0,
+      "dueDate": "2025-11-15",
+      "date": "2025-10-16",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-lapsed-hist-2",
+      "contactId": "c-lapsed",
+      "contactName": "Lapsed Co B",
+      "amount": 5200,
+      "amountDue": 0,
+      "dueDate": "2025-12-20",
+      "date": "2025-11-20",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-lapsed-hist-3",
+      "contactId": "c-lapsed",
+      "contactName": "Lapsed Co B",
+      "amount": 4300,
+      "amountDue": 0,
+      "dueDate": "2026-01-18",
+      "date": "2025-12-19",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-aurora-paid-1",
+      "contactId": "c-aurora",
+      "contactName": "Aurora Supplies Ltd",
+      "amount": 3500,
+      "amountDue": 0,
+      "dueDate": "2026-03-10",
+      "date": "2026-02-08",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-aurora-paid-2",
+      "contactId": "c-aurora",
+      "contactName": "Aurora Supplies Ltd",
+      "amount": 4200,
+      "amountDue": 0,
+      "dueDate": "2026-04-15",
+      "date": "2026-03-16",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-aurora-paid-3",
+      "contactId": "c-aurora",
+      "contactName": "Aurora Supplies Ltd",
+      "amount": 2800,
+      "amountDue": 0,
+      "dueDate": "2026-05-20",
+      "date": "2026-04-20",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-bright-paid-1",
+      "contactId": "c-bright",
+      "contactName": "Brightline Media",
+      "amount": 4000,
+      "amountDue": 0,
+      "dueDate": "2026-02-28",
+      "date": "2026-01-29",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-bright-paid-2",
+      "contactId": "c-bright",
+      "contactName": "Brightline Media",
+      "amount": 3800,
+      "amountDue": 0,
+      "dueDate": "2026-04-05",
+      "date": "2026-03-06",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-north-paid-1",
+      "contactId": "c-north",
+      "contactName": "Northwind Retail",
+      "amount": 2100,
+      "amountDue": 0,
+      "dueDate": "2026-03-01",
+      "date": "2026-02-01",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-north-paid-2",
+      "contactId": "c-north",
+      "contactName": "Northwind Retail",
+      "amount": 2400,
+      "amountDue": 0,
+      "dueDate": "2026-04-10",
+      "date": "2026-03-11",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-north-paid-3",
+      "contactId": "c-north",
+      "contactName": "Northwind Retail",
+      "amount": 2600,
+      "amountDue": 0,
+      "dueDate": "2026-05-12",
+      "date": "2026-04-12",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-summit-paid-1",
+      "contactId": "c-summit",
+      "contactName": "Summit Logistics",
+      "amount": 3000,
+      "amountDue": 0,
+      "dueDate": "2026-03-20",
+      "date": "2026-02-18",
+      "status": "PAID",
+      "type": "ACCREC"
+    },
+    {
+      "invoiceId": "inv-summit-paid-2",
+      "contactId": "c-summit",
+      "contactName": "Summit Logistics",
+      "amount": 3100,
+      "amountDue": 0,
+      "dueDate": "2026-05-01",
+      "date": "2026-04-01",
+      "status": "PAID",
+      "type": "ACCREC"
+    }
+  ],
+  "payments": [
+    {
+      "paymentId": "pay-aurora-1",
+      "invoiceId": "inv-aurora-paid-1",
+      "contactId": "c-aurora",
+      "amount": 3500,
+      "date": "2026-03-12",
+      "daysToPay": 2,
+      "onTime": true
+    },
+    {
+      "paymentId": "pay-aurora-2",
+      "invoiceId": "inv-aurora-paid-2",
+      "contactId": "c-aurora",
+      "amount": 4200,
+      "date": "2026-04-18",
+      "daysToPay": 3,
+      "onTime": true
+    },
+    {
+      "paymentId": "pay-aurora-3",
+      "invoiceId": "inv-aurora-paid-3",
+      "contactId": "c-aurora",
+      "amount": 2800,
+      "date": "2026-05-22",
+      "daysToPay": 2,
+      "onTime": true
+    },
+    {
+      "paymentId": "pay-bright-1",
+      "invoiceId": "inv-bright-paid-1",
+      "contactId": "c-bright",
+      "amount": 4000,
+      "date": "2026-03-20",
+      "daysToPay": 20,
+      "onTime": false
+    },
+    {
+      "paymentId": "pay-bright-2",
+      "invoiceId": "inv-bright-paid-2",
+      "contactId": "c-bright",
+      "amount": 3800,
+      "date": "2026-04-25",
+      "daysToPay": 20,
+      "onTime": false
+    },
+    {
+      "paymentId": "pay-north-1",
+      "invoiceId": "inv-north-paid-1",
+      "contactId": "c-north",
+      "amount": 2100,
+      "date": "2026-03-05",
+      "daysToPay": 4,
+      "onTime": true
+    },
+    {
+      "paymentId": "pay-north-2",
+      "invoiceId": "inv-north-paid-2",
+      "contactId": "c-north",
+      "amount": 2400,
+      "date": "2026-04-12",
+      "daysToPay": 2,
+      "onTime": true
+    },
+    {
+      "paymentId": "pay-north-3",
+      "invoiceId": "inv-north-paid-3",
+      "contactId": "c-north",
+      "amount": 2600,
+      "date": "2026-05-18",
+      "daysToPay": 6,
+      "onTime": true
+    },
+    {
+      "paymentId": "pay-summit-1",
+      "invoiceId": "inv-summit-paid-1",
+      "contactId": "c-summit",
+      "amount": 3000,
+      "date": "2026-03-22",
+      "daysToPay": 2,
+      "onTime": true
+    },
+    {
+      "paymentId": "pay-summit-2",
+      "invoiceId": "inv-summit-paid-2",
+      "contactId": "c-summit",
+      "amount": 3100,
+      "date": "2026-05-15",
+      "daysToPay": 14,
+      "onTime": false
+    },
+    {
+      "paymentId": "pay-lapsed-1",
+      "invoiceId": "inv-lapsed-hist-1",
+      "contactId": "c-lapsed",
+      "amount": 4500,
+      "date": "2025-11-18",
+      "daysToPay": 3,
+      "onTime": true
+    },
+    {
+      "paymentId": "pay-lapsed-2",
+      "invoiceId": "inv-lapsed-hist-2",
+      "contactId": "c-lapsed",
+      "amount": 5200,
+      "date": "2025-12-22",
+      "daysToPay": 2,
+      "onTime": true
+    },
+    {
+      "paymentId": "pay-lapsed-3",
+      "invoiceId": "inv-lapsed-hist-3",
+      "contactId": "c-lapsed",
+      "amount": 4300,
+      "date": "2026-01-20",
+      "daysToPay": 2,
+      "onTime": true
+    }
+  ]
+}
