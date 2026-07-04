@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteRouteImport } from './routes/app/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
@@ -16,6 +17,11 @@ import { Route as CallTokenRouteImport } from './routes/call/$token'
 import { Route as AppCashRouteImport } from './routes/app/cash'
 import { Route as AppActionsRouteImport } from './routes/app/actions'
 
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/app',
   path: '/app',
@@ -50,6 +56,7 @@ const AppActionsRoute = AppActionsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
+  '/login': typeof LoginRoute
   '/app/actions': typeof AppActionsRoute
   '/app/cash': typeof AppCashRoute
   '/call/$token': typeof CallTokenRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/app/actions': typeof AppActionsRoute
   '/app/cash': typeof AppCashRoute
   '/call/$token': typeof CallTokenRoute
@@ -66,6 +74,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
+  '/login': typeof LoginRoute
   '/app/actions': typeof AppActionsRoute
   '/app/cash': typeof AppCashRoute
   '/call/$token': typeof CallTokenRoute
@@ -74,13 +83,20 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/app' | '/app/actions' | '/app/cash' | '/call/$token' | '/app/'
+    | '/'
+    | '/app'
+    | '/login'
+    | '/app/actions'
+    | '/app/cash'
+    | '/call/$token'
+    | '/app/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app/actions' | '/app/cash' | '/call/$token' | '/app'
+  to: '/' | '/login' | '/app/actions' | '/app/cash' | '/call/$token' | '/app'
   id:
     | '__root__'
     | '/'
     | '/app'
+    | '/login'
     | '/app/actions'
     | '/app/cash'
     | '/call/$token'
@@ -90,11 +106,19 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRouteRoute: typeof AppRouteRouteWithChildren
+  LoginRoute: typeof LoginRoute
   CallTokenRoute: typeof CallTokenRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app': {
       id: '/app'
       path: '/app'
@@ -159,6 +183,7 @@ const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRouteRoute: AppRouteRouteWithChildren,
+  LoginRoute: LoginRoute,
   CallTokenRoute: CallTokenRoute,
 }
 export const routeTree = rootRouteImport
