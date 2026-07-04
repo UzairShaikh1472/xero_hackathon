@@ -1,0 +1,52 @@
+{
+  "receivablesDraft": {
+    "ok": true,
+    "mode": "fallback",
+    "generatedAt": "2026-07-04T14:00:00Z",
+    "data": {
+      "id": "draft_receivables_inv_demo_001",
+      "type": "receivables_discount",
+      "targetId": "inv_demo_001",
+      "targetName": "Acorn Retail",
+      "currency": "GBP",
+      "priority": "high",
+      "reason": "INV-001 is overdue by 10 days with GBP 8200 outstanding.",
+      "expectedImpact": {
+        "amount": 7954,
+        "currency": "GBP"
+      },
+      "subjectLine": "Quick settlement option for INV-001",
+      "draftMessage": "Hi Acorn Retail, we noticed INV-001 is still outstanding. If payment can be completed this week, we can offer a 3% early settlement discount to help close it promptly.",
+      "metadata": {
+        "tone": "firm",
+        "discountPercent": 3,
+        "invoiceNumber": "INV-001",
+        "daysOverdue": 10
+      }
+    }
+  },
+  "simulateExecute": {
+    "ok": true,
+    "mode": "fallback",
+    "generatedAt": "2026-07-04T14:00:00Z",
+    "data": {
+      "executionId": "exec_example_001",
+      "actionType": "receivables_discount",
+      "actionId": "draft_receivables_inv_demo_001",
+      "status": "simulated",
+      "idempotencyKey": "demo-key-001",
+      "expectedCashUnlocked": {
+        "amount": 7954,
+        "currency": "GBP"
+      },
+      "cashUnlocked": {
+        "amount": 7954,
+        "currency": "GBP"
+      },
+      "auditLog": {
+        "createdAt": "2026-07-04T14:00:00Z",
+        "message": "Simulated receivables_discount for draft_receivables_inv_demo_001."
+      }
+    }
+  }
+}
