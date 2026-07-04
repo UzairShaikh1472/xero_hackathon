@@ -3,6 +3,7 @@ import { getBackendMode } from "../config/runtime-mode.js";
 import { loadFallbackData } from "../demo/fallback-loader.js";
 import { normalizeContact, normalizeInvoice } from "../domain/normalizers.js";
 import type { ApiEnvelope, PhaseOneSnapshot } from "../domain/types.js";
+import { HttpError } from "../utils/http-error.js";
 import { logger } from "../utils/logger.js";
 import { exchangeCodeForToken, fetchConnections, refreshAccessToken } from "../xero/api.js";
 import { getContacts, getInvoices } from "../xero/fetchers.js";
@@ -14,6 +15,18 @@ import {
   setTenant,
   setTokenSet
 } from "../xero/session-store.js";
+
+const CACHE_TTL_MS = 60_000;
+
+let cachedSnapshot: PhaseOneSnapshot | null = null;
+let cachedAt = 0;
+let inflightSync: Promise<PhaseOneSnapshot> | null = null;
+
+export function clearSnapshotCache() {
+  cachedSnapshot = null;
+  cachedAt = 0;
+  inflightSync = null;
+}
 
 function buildEnvelope(snapshot: PhaseOneSnapshot): ApiEnvelope<PhaseOneSnapshot> {
   return {
@@ -133,54 +146,95 @@ export async function getPhaseOneSnapshot() {
 }
 
 export async function getPhaseOneSnapshotData(): Promise<PhaseOneSnapshot> {
+  const now = Date.now();
+  if (cachedSnapshot && now - cachedAt < CACHE_TTL_MS) {
+    return cachedSnapshot;
+  }
+
+  if (inflightSync) {
+    return inflightSync;
+  }
+
+  inflightSync = fetchSnapshotFromXeroOrFallback()
+    .then((snapshot) => {
+      cachedSnapshot = snapshot;
+      cachedAt = Date.now();
+      return snapshot;
+    })
+    .finally(() => {
+      inflightSync = null;
+    });
+
+  return inflightSync;
+}
+
+async function fetchSnapshotFromXeroOrFallback(): Promise<PhaseOneSnapshot> {
+  const tokenSet = getTokenSet();
+  const tenant = getTenant();
+
+  if (tokenSet && tenant) {
+    try {
+      return await syncLiveSnapshot(tenant);
+    } catch (error) {
+      logger.warn("xero.sync.failed", {
+        message: error instanceof Error ? error.message : "Unknown sync error",
+        statusCode: error instanceof HttpError ? error.statusCode : undefined
+      });
+
+      if (cachedSnapshot) {
+        logger.warn("xero.sync.using_stale_cache", {
+          cachedAgeMs: Date.now() - cachedAt
+        });
+        return cachedSnapshot;
+      }
+
+      if (!env.USE_XERO_FALLBACK) {
+        throw error;
+      }
+
+      return buildFallbackSnapshot();
+    }
+  }
+
   if (env.USE_XERO_FALLBACK) {
     return buildFallbackSnapshot();
   }
 
-  const tokenSet = getTokenSet();
-  const tenant = getTenant();
+  return buildFallbackSnapshot();
+}
 
-  if (!tokenSet || !tenant) {
-    return buildFallbackSnapshot();
+async function syncLiveSnapshot(
+  tenant: NonNullable<ReturnType<typeof getTenant>>
+): Promise<PhaseOneSnapshot> {
+  const accessToken = await getUsableAccessToken();
+  if (!accessToken) {
+    throw new Error("No usable Xero access token");
   }
 
-  try {
-    const accessToken = await getUsableAccessToken();
-    if (!accessToken) {
-      return buildFallbackSnapshot();
+  const [rawInvoices, rawContacts] = await Promise.all([
+    getInvoices(accessToken, tenant.tenantId),
+    getContacts(accessToken, tenant.tenantId)
+  ]);
+
+  const lastSyncAt = new Date().toISOString();
+  setLastSyncAt(lastSyncAt);
+
+  const normalizedInvoices = rawInvoices.map(normalizeInvoice);
+  const snapshot: PhaseOneSnapshot = {
+    invoices: normalizedInvoices,
+    contacts: rawContacts.map(normalizeContact),
+    sync: {
+      source: "live",
+      invoicesCount: rawInvoices.length,
+      contactsCount: rawContacts.length,
+      lastSyncAt,
+      tenantId: tenant.tenantId,
+      organizationName: tenant.tenantName,
+      currency: getCurrencyFromInvoices(normalizedInvoices)
     }
+  };
 
-    const [rawInvoices, rawContacts] = await Promise.all([
-      getInvoices(accessToken, tenant.tenantId),
-      getContacts(accessToken, tenant.tenantId)
-    ]);
-
-    const lastSyncAt = new Date().toISOString();
-    setLastSyncAt(lastSyncAt);
-
-    const normalizedInvoices = rawInvoices.map(normalizeInvoice);
-    const snapshot: PhaseOneSnapshot = {
-      invoices: normalizedInvoices,
-      contacts: rawContacts.map(normalizeContact),
-      sync: {
-        source: "live",
-        invoicesCount: rawInvoices.length,
-        contactsCount: rawContacts.length,
-        lastSyncAt,
-        tenantId: tenant.tenantId,
-        organizationName: tenant.tenantName,
-        currency: getCurrencyFromInvoices(normalizedInvoices)
-      }
-    };
-
-    return enrichContacts(snapshot);
-  } catch (error) {
-    logger.warn("xero.sync.failed_using_fallback", {
-      message: error instanceof Error ? error.message : "Unknown sync error"
-    });
-
-    return buildFallbackSnapshot();
-  }
+  return enrichContacts(snapshot);
 }
 
 function buildFallbackSnapshot(): PhaseOneSnapshot {
