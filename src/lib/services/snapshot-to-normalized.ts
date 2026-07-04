@@ -1,4 +1,3 @@
-import { getNormalizedData } from "../../handlers/data.js";
 import type { PhaseOneSnapshot } from "../domain/types.js";
 import type {
   InvoiceStatus,
@@ -53,8 +52,8 @@ export function snapshotToNormalized(snapshot: PhaseOneSnapshot): NormalizedData
     .reduce((sum, invoice) => sum + invoice.amount, 0);
 
   return {
-    // Phase-one sync has no bank balance yet; use demo fixture cash until Xero feeds land.
-    cash: getNormalizedData().cash,
+    // Phase-one sync does not include bank-feed cash yet.
+    cash: snapshot.sync.source === "fallback" ? 48200 : 0,
     asOfDate,
     invoices,
     contacts,

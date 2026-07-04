@@ -1,118 +1,116 @@
-# Xero Kinetic Backend
+# UpFlow
 
-Phase 1 backend foundation for the `Person 1: Xero + Backend + Execution Owner` track.
+UpFlow is a Xero-connected cash control room with:
 
-## What is already working
+- live Xero OAuth
+- live invoice and contact sync
+- fallback demo data
+- summary, liquidity, at-risk, revenue, payables, and execution history APIs
+- draft generation for receivables, payables, and re-engagement actions
+- email reminders for receivables under 14 days overdue
+- automated call reminders for receivables overdue by 15+ days
+- simulated approval flow with idempotency
 
-- Express + TypeScript backend scaffold
-- Structured API envelope format
-- Xero OAuth URL generation
-- Xero callback handling
-- In-memory token and tenant session store
-- Phase 1 sync route for invoices and contacts
-- Seeded fallback mode for demo safety
-
-## Current endpoints
+## Main backend routes
 
 - `GET /api/health`
+- `GET /api/summary`
+- `GET /api/liquidity`
+- `GET /api/invoices/at-risk`
+- `GET /api/revenue-opportunities`
+- `GET /api/payables/open`
+- `GET /api/executions/history`
 - `GET /api/xero/auth-url`
 - `GET /api/xero/callback`
 - `GET /api/sync/phase-one`
+- `POST /api/agent/receivables-draft`
+- `POST /api/agent/payables-draft`
+- `POST /api/agent/reengagement-quote`
+- `POST /api/communications/send-email`
+- `POST /api/communications/place-call`
+- `POST /api/simulate/execute`
 - `POST /api/xero/disconnect`
 
 ## Local setup
 
-1. Install dependencies:
+1. Install backend dependencies:
 
 ```bash
 pnpm install
 ```
 
-2. Create a local env file:
+2. Install frontend dependencies:
 
 ```bash
-copy .env.example .env
+cd frontend
+pnpm install
 ```
 
-3. Fill in the Xero values in `.env`.
+3. Create `.env` from `.env.example`.
 
-4. Start the backend:
+4. Set these important values:
+
+```env
+PORT=3001
+FRONTEND_APP_URL=http://localhost:8080
+USE_XERO_FALLBACK=false
+XERO_CLIENT_ID=your-client-id
+XERO_CLIENT_SECRET=your-client-secret
+XERO_REDIRECT_URI=http://localhost:3001/api/xero/callback
+XERO_SCOPES=openid profile email offline_access accounting.transactions accounting.contacts accounting.settings accounting.reports.read
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_FROM_NUMBER=
+```
+
+5. Start the backend from the repo root:
 
 ```bash
 pnpm dev
 ```
 
-The backend runs on `http://localhost:3001` by default.
+6. Start the frontend from `frontend/`:
 
-## Required Xero env values
-
-```env
-PORT=3001
-NODE_ENV=development
-USE_XERO_FALLBACK=false
-XERO_STATE_SALT=replace-this-with-a-random-secret
-XERO_CLIENT_ID=your-client-id
-XERO_CLIENT_SECRET=your-client-secret
-XERO_REDIRECT_URI=http://localhost:3001/api/xero/callback
-XERO_SCOPES=openid profile email offline_access accounting.invoices accounting.contacts accounting.settings
+```bash
+pnpm dev
 ```
 
 ## Xero app setup
 
 In the Xero developer app:
 
-- create an app
 - set the redirect URI to `http://localhost:3001/api/xero/callback`
 - keep the client ID and client secret ready
-- connect a demo or real tenant
+- ensure the requested scopes match the backend config
 
-## Live connection flow
+## Notes
 
-1. Set `USE_XERO_FALLBACK=false`
-2. Start the backend
-3. Open:
+- OAuth success redirects to `FRONTEND_APP_URL/?xero=connected`
+- fallback mode still works if live sync is unavailable
+- draft generation is live
+- reminder emails only send when SMTP is configured
+- reminder calls only place when Twilio Voice is configured
+- invoices under 14 days overdue are routed to email
+- invoices overdue by 15 days or more are routed to voice
+- invoices at exactly 14 days overdue remain a manual review lane for now
 
-```txt
-http://localhost:3001/api/xero/auth-url
-```
+## External setup for live reminders
 
-4. Copy the returned `authUrl` into the browser and complete Xero login
-5. Xero redirects back to `/api/xero/callback`
-6. Then open:
+For email:
 
-```txt
-http://localhost:3001/api/sync/phase-one
-```
+- use any SMTP provider such as Gmail SMTP, Outlook, SendGrid, or Mailgun
+- fill in `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`
+- make sure the sender mailbox is allowed to send externally
 
-If live auth or fetch fails, switch fallback back on:
+For voice:
 
-```env
-USE_XERO_FALLBACK=true
-```
-
-## Phase 1 goal
-
-Phase 1 is done when:
-
-- auth flow works
-- invoices fetch
-- contacts fetch
-- fallback route still works
-- structured response contracts stay stable
-
-## Important limitation right now
-
-The session store is currently in-memory only.
-
-That is fine for hackathon bring-up, but if the server restarts:
-
-- access tokens are lost
-- tenant selection is lost
-- last sync state is lost
-
-Next step after Phase 1 is to add:
-
-- refresh token handling
-- persistent session storage
-- summary/liquidity endpoints
-- richer normalization for contacts and invoice metrics
+- create a Twilio account and buy or verify an outbound phone number
+- fill in `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER`
+- the current implementation uses Twilio REST API plus TwiML `<Say>` for a polite reminder script
+- for richer live conversation later, switch the scripted call flow to Twilio ConversationRelay or another realtime voice stack

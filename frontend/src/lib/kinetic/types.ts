@@ -1,7 +1,7 @@
 // Data contract for UpFlow. Person 1's backend must return these shapes.
 // Frontend imports only from here — never from seed.ts directly.
 
-export type Currency = "GBP";
+export type Currency = string;
 
 export interface CompanySnapshot {
   orgName: string;
@@ -69,14 +69,24 @@ export interface RepeatBuyer {
   upsellPotential: number;
 }
 
-export type AgentKind = "receivables" | "payables";
+export type DraftActionType =
+  | "receivables_discount"
+  | "payables_extension"
+  | "reengagement_quote";
+
+export type AgentKind = "receivables" | "payables" | "reengagement";
 export type Urgency = "low" | "medium" | "high" | "critical";
 
 export interface NegotiationDraft {
   id: string;
+  actionType: DraftActionType;
   agent: AgentKind;
   targetName: string;
   targetId: string;
+  currency: Currency;
+  contactEmail?: string;
+  contactPhone?: string;
+  daysOverdue?: number;
   urgency: Urgency;
   reason: string;
   proposedAction: string;
@@ -87,9 +97,21 @@ export interface NegotiationDraft {
   body: string;
 }
 
+export interface CommunicationResult {
+  draftId: string;
+  channel: "email" | "call";
+  status: "sent" | "queued";
+  recipientName: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  providerId?: string;
+  message: string;
+  scriptPreview?: string;
+}
+
 export interface ExecutionResult {
   draftId: string;
-  status: "simulated" | "approved" | "rejected";
+  status: "simulated" | "rejected";
   executedAt: string;
   cashImpact: number;
   newProjectedShortfall: number;

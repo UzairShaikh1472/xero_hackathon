@@ -180,7 +180,9 @@ export async function buildReceivablesDraftResponse(
           tone,
           discountPercent,
           invoiceNumber: invoice.invoiceNumber,
-          daysOverdue: invoice.daysOverdue
+          daysOverdue: invoice.daysOverdue,
+          contactEmail: snapshot.contacts.find((item) => item.id === invoice.contactId)?.email ?? null,
+          contactPhone: snapshot.contacts.find((item) => item.id === invoice.contactId)?.phone ?? null
         }
       });
     },
@@ -202,7 +204,9 @@ export async function buildReceivablesDraftResponse(
         tone,
         discountPercent,
         invoiceNumber: invoice.invoiceNumber,
-        daysOverdue: invoice.daysOverdue
+        daysOverdue: invoice.daysOverdue,
+        contactEmail: snapshot.contacts.find((item) => item.id === invoice.contactId)?.email ?? null,
+        contactPhone: snapshot.contacts.find((item) => item.id === invoice.contactId)?.phone ?? null
       }
     })
   );
@@ -275,7 +279,15 @@ export async function buildPayablesDraftResponse(
         metadata: {
           tone,
           extensionDays,
-          requestedAmount: amount
+          requestedAmount: amount,
+          contactEmail:
+            matchingPayable
+              ? snapshot.contacts.find((item) => item.id === matchingPayable.contactId)?.email ?? null
+              : null,
+          contactPhone:
+            matchingPayable
+              ? snapshot.contacts.find((item) => item.id === matchingPayable.contactId)?.phone ?? null
+              : null
         }
       });
     },
@@ -296,7 +308,15 @@ export async function buildPayablesDraftResponse(
       metadata: {
         tone,
         extensionDays,
-        requestedAmount: amount
+        requestedAmount: amount,
+        contactEmail:
+          matchingPayable
+            ? snapshot.contacts.find((item) => item.id === matchingPayable.contactId)?.email ?? null
+            : null,
+        contactPhone:
+          matchingPayable
+            ? snapshot.contacts.find((item) => item.id === matchingPayable.contactId)?.phone ?? null
+            : null
       }
     })
   );
@@ -368,7 +388,9 @@ export async function buildReengagementQuoteResponse(
         metadata: {
           tone,
           offerPercent,
-          averageInvoiceValue: contact.averageInvoice.amount
+          averageInvoiceValue: contact.averageInvoice.amount,
+          contactEmail: contact.email ?? null,
+          contactPhone: contact.phone ?? null
         }
       });
     },
@@ -389,7 +411,9 @@ export async function buildReengagementQuoteResponse(
       metadata: {
         tone,
         offerPercent,
-        averageInvoiceValue: contact.averageInvoice.amount
+        averageInvoiceValue: contact.averageInvoice.amount,
+        contactEmail: contact.email ?? null,
+        contactPhone: contact.phone ?? null
       }
     })
   );

@@ -16,6 +16,7 @@ export type ContactSummary = {
   id: string;
   name: string;
   email?: string;
+  phone?: string;
   totalInvoices: number;
   totalPaid: Money;
   averageInvoice: Money;
@@ -48,6 +49,8 @@ export type HealthStatus = {
   authReady: boolean;
   fallbackEnabled: boolean;
   lastSyncAt: string | null;
+  emailConfigured: boolean;
+  voiceConfigured: boolean;
 };
 
 export type SyncStatus = {
@@ -199,6 +202,26 @@ export type NegotiationDraft = {
   subjectLine: string;
   draftMessage: string;
   metadata: Record<string, string | number | boolean | null>;
+};
+
+export type SendDraftEmailRequest = {
+  draftId: string;
+};
+
+export type PlaceDraftCallRequest = {
+  draftId: string;
+};
+
+export type CommunicationActionResult = {
+  draftId: string;
+  channel: "email" | "call";
+  status: "sent" | "queued";
+  recipientName: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  providerId?: string;
+  message: string;
+  scriptPreview?: string;
 };
 
 export type SimulationExecuteRequest = {

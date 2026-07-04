@@ -186,9 +186,11 @@ export const seedData: ControlRoomData = {
   drafts: [
     {
       id: "draft-r1",
-      agent: "receivables",
+      actionType: "receivables_discount",
+      agent: "reengagement",
       targetName: "Northwind Logistics",
       targetId: "cust-12",
+      currency: "GBP",
       urgency: "high",
       reason:
         "£12,400 overdue by 14 days. Historically pays within 5 days — likely internal queue delay.",
@@ -202,9 +204,11 @@ export const seedData: ControlRoomData = {
     },
     {
       id: "draft-r2",
+      actionType: "receivables_discount",
       agent: "receivables",
       targetName: "Kestrel Interiors",
       targetId: "cust-52",
+      currency: "GBP",
       urgency: "critical",
       reason: "Third overdue invoice this quarter. £5,320 outstanding for 22 days.",
       proposedAction: "Formal escalation with a proposed 3-instalment payment plan.",
@@ -217,9 +221,11 @@ export const seedData: ControlRoomData = {
     },
     {
       id: "draft-p1",
+      actionType: "payables_extension",
       agent: "payables",
       targetName: "Ironbridge Metals",
       targetId: "sup-221",
+      currency: "GBP",
       urgency: "medium",
       reason: "£18,400 due in 4 days coincides with projected liquidity dip on day 14-18.",
       proposedAction: "Request a 14-day extension to smooth cash outflow through payroll week.",
@@ -232,9 +238,11 @@ export const seedData: ControlRoomData = {
     },
     {
       id: "draft-r3",
+      actionType: "reengagement_quote",
       agent: "receivables",
       targetName: "Blackwood & Sons",
       targetId: "cust-88",
+      currency: "GBP",
       urgency: "medium",
       reason: "Lapsed 92 days. £84.2k LTV. Estimated £12.8k recoverable.",
       proposedAction: "Re-engagement offer: 5% credit on next order placed this month.",

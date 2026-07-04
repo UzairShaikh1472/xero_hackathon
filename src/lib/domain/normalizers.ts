@@ -50,14 +50,49 @@ export function normalizeInvoice(raw: Record<string, unknown>): InvoiceSummary {
 }
 
 export function normalizeContact(raw: Record<string, unknown>): ContactSummary {
+  const phone = extractPhone(raw.Phones);
+
   return {
     id: String(raw.ContactID ?? ""),
     name: String(raw.Name ?? "Unknown"),
     email: raw.EmailAddress ? String(raw.EmailAddress) : undefined,
+    phone,
     totalInvoices: 0,
     totalPaid: money(0),
     averageInvoice: money(0),
     lastInvoiceDate: undefined,
     paymentReliability: undefined
   };
+}
+
+function extractPhone(rawPhones: unknown): string | undefined {
+  if (!Array.isArray(rawPhones)) {
+    return undefined;
+  }
+
+  for (const entry of rawPhones) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+
+    const phone = entry as {
+      PhoneNumber?: unknown;
+      PhoneAreaCode?: unknown;
+      PhoneCountryCode?: unknown;
+    };
+
+    const direct = String(phone.PhoneNumber ?? "").trim();
+    if (direct) {
+      return direct;
+    }
+
+    const parts = [phone.PhoneCountryCode, phone.PhoneAreaCode, phone.PhoneNumber]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join(" ");
+    }
+  }
+
+  return undefined;
 }
