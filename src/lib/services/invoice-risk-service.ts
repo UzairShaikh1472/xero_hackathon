@@ -22,7 +22,12 @@ export async function buildInvoiceRiskResponse(): Promise<ApiEnvelope<InvoiceRis
   const currency = snapshot.sync.currency;
 
   const items = snapshot.invoices
-    .filter((invoice) => invoice.isOutstanding && (invoice.isOverdue || invoice.amountDue.amount >= 2500))
+    .filter(
+      (invoice) =>
+        invoice.direction === "receivable" &&
+        invoice.isOutstanding &&
+        (invoice.isOverdue || invoice.amountDue.amount >= 2500)
+    )
     .map((invoice) => {
       const riskScore = buildRiskScore(invoice.daysOverdue, invoice.amountDue.amount);
       const priority = buildPriority(riskScore);
