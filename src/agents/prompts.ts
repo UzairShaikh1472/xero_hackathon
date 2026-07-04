@@ -70,7 +70,15 @@ FACTS (use only these; do not invent anything else):
 Write draftMessage requesting the recommended action.`;
 }
 
-export function reengagementUserPrompt(customer: LapsedCustomer): string {
+export function reengagementUserPrompt(
+  customer: LapsedCustomer,
+  channel: "email" | "voice_invite",
+): string {
+  const channelGuidance =
+    channel === "voice_invite"
+      ? "This customer has been inactive for a long time. Write a brief email body inviting them to speak with our voice agent via a call link — warm, not pushy."
+      : "This customer was recently lapsed. Write a friendly win-back email with the returning-customer incentive — no call link needed.";
+
   return `Draft a lapsed-customer re-engagement / win-back message.
 
 FACTS (use only these; do not invent anything else):
@@ -80,6 +88,9 @@ FACTS (use only these; do not invent anything else):
 - Historical LTV: £${customer.historicalLTV.toFixed(2)}
 - Lapsed score: ${customer.lapsedScore.toFixed(2)}
 - Recommended action: ${customer.recommendedAction}
+- Outreach channel: ${channel === "voice_invite" ? "voice agent invite email" : "direct win-back email"}
+
+${channelGuidance}
 
 Write draftMessage following the recommended action (e.g. re-engagement quote).`;
 }

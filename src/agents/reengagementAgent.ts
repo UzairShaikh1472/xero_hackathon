@@ -1,4 +1,5 @@
 import type { LapsedCustomer, NegotiationDraft } from "../types/financial.js";
+import { reactivationChannel } from "../engines/revenue.js";
 import { composeNegotiationDraft } from "./compose.js";
 import { reengagementUserPrompt } from "./prompts.js";
 import { reengagementReason } from "./reasons.js";
@@ -6,7 +7,8 @@ import { reengagementReason } from "./reasons.js";
 export async function draftReengagementQuote(
   customer: LapsedCustomer,
 ): Promise<NegotiationDraft> {
-  return composeNegotiationDraft(reengagementUserPrompt(customer), {
+  const channel = reactivationChannel(customer.daysSinceLastActivity);
+  return composeNegotiationDraft(reengagementUserPrompt(customer, channel), {
     targetType: "lapsed_customer",
     contactName: customer.contactName,
     urgency: urgencyFromDaysInactive(customer.daysSinceLastActivity),

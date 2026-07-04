@@ -15,6 +15,17 @@ import type {
 /** Days without activity before a customer is considered lapsed. */
 export const LAPSED_THRESHOLD_DAYS = 90;
 
+/** Days silent before reactivation switches from email to voice-agent outreach. */
+export const REACTIVATION_VOICE_THRESHOLD_DAYS = 120;
+
+export type ReactivationChannel = "email" | "voice_invite";
+
+export function reactivationChannel(daysSinceLastActivity: number): ReactivationChannel {
+  return daysSinceLastActivity >= REACTIVATION_VOICE_THRESHOLD_DAYS
+    ? "voice_invite"
+    : "email";
+}
+
 export interface RevenueOpportunities {
   lapsedCustomers: LapsedCustomer[];
   repeatBuyers: RepeatBuyer[];
@@ -50,7 +61,9 @@ export function analyzeRevenue(data: NormalizedData): RevenueOpportunities {
           a.historicalLTV,
           a.daysSinceLastActivity,
         ),
-        recommendedAction: "Send re-engagement quote",
+        recommendedAction: reactivationChannel(a.daysSinceLastActivity) === "voice_invite"
+          ? `Send voice-agent invite email — inactive ${a.daysSinceLastActivity} days`
+          : "Send win-back email with returning-customer incentive",
       }),
     )
     .sort((a, b) => b.lapsedScore - a.lapsedScore);
