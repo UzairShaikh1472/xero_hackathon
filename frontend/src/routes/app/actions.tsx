@@ -1,9 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ActionsFollowUp } from "@/components/control-room/actions-follow-up";
-import { ActionsResolved } from "@/components/control-room/actions-resolved";
+import { ActionsTimeline } from "@/components/control-room/actions-timeline";
+import { TourAnchor, TOUR_STEPS } from "@/components/control-room/demo-tour";
 import { useControlRoom } from "@/components/control-room/control-room-context";
+import { buildEscalationTimeline } from "@/lib/kinetic/action-timeline";
 import { controlRoomQuery, followUpsQuery, draftsQuery } from "@/lib/kinetic/queries";
 
 import { AppErrorState } from "@/components/control-room/app-error-state";
@@ -23,9 +26,12 @@ function ActionsPage() {
   const {
     data,
     health,
+    communications,
+    executions,
     isDraftsFetching,
     isDraftsError,
     draftsError,
+    tourStep,
     setOpenDraft,
     handleSendEmail,
     handleSendVoiceInvite,
@@ -33,6 +39,19 @@ function ActionsPage() {
     refetch,
   } = useControlRoom();
   const { data: followUps } = useQuery(followUpsQuery);
+  const activeAnchor = tourStep !== null ? TOUR_STEPS[tourStep].anchor : null;
+
+  const escalationSteps = useMemo(
+    () =>
+      buildEscalationTimeline({
+        followUps,
+        communications,
+        executions,
+        audit: data.audit,
+        drafts: data.drafts,
+      }),
+    [followUps, communications, executions, data.audit, data.drafts],
+  );
 
   if (isDraftsError && data.drafts.length === 0) {
     return (
@@ -66,6 +85,10 @@ function ActionsPage() {
         )}
       </div>
 
+      <TourAnchor id="actions" active={activeAnchor === "actions"}>
+        <ActionsTimeline steps={escalationSteps} />
+      </TourAnchor>
+
       <ActionsFollowUp
         drafts={data.drafts}
         emailConfigured={health?.emailConfigured ?? false}
@@ -75,8 +98,6 @@ function ActionsPage() {
         onSendVoiceInvite={handleSendVoiceInvite}
         onStartCall={handleStartCall}
       />
-
-      <ActionsResolved resolved={followUps?.resolved ?? []} />
     </div>
   );
 }

@@ -14,7 +14,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as CallTokenRouteImport } from './routes/call/$token'
 import { Route as AppCashRouteImport } from './routes/app/cash'
-import { Route as AppAgentsRouteImport } from './routes/app/agents'
 import { Route as AppActionsRouteImport } from './routes/app/actions'
 
 const AppRouteRoute = AppRouteRouteImport.update({
@@ -42,11 +41,6 @@ const AppCashRoute = AppCashRouteImport.update({
   path: '/cash',
   getParentRoute: () => AppRouteRoute,
 } as any)
-const AppAgentsRoute = AppAgentsRouteImport.update({
-  id: '/agents',
-  path: '/agents',
-  getParentRoute: () => AppRouteRoute,
-} as any)
 const AppActionsRoute = AppActionsRouteImport.update({
   id: '/actions',
   path: '/actions',
@@ -57,7 +51,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
   '/app/actions': typeof AppActionsRoute
-  '/app/agents': typeof AppAgentsRoute
   '/app/cash': typeof AppCashRoute
   '/call/$token': typeof CallTokenRoute
   '/app/': typeof AppIndexRoute
@@ -65,7 +58,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app/actions': typeof AppActionsRoute
-  '/app/agents': typeof AppAgentsRoute
   '/app/cash': typeof AppCashRoute
   '/call/$token': typeof CallTokenRoute
   '/app': typeof AppIndexRoute
@@ -75,7 +67,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
   '/app/actions': typeof AppActionsRoute
-  '/app/agents': typeof AppAgentsRoute
   '/app/cash': typeof AppCashRoute
   '/call/$token': typeof CallTokenRoute
   '/app/': typeof AppIndexRoute
@@ -83,22 +74,14 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
-    | '/app'
-    | '/app/actions'
-    | '/app/agents'
-    | '/app/cash'
-    | '/call/$token'
-    | '/app/'
+    '/' | '/app' | '/app/actions' | '/app/cash' | '/call/$token' | '/app/'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    '/' | '/app/actions' | '/app/agents' | '/app/cash' | '/call/$token' | '/app'
+  to: '/' | '/app/actions' | '/app/cash' | '/call/$token' | '/app'
   id:
     | '__root__'
     | '/'
     | '/app'
     | '/app/actions'
-    | '/app/agents'
     | '/app/cash'
     | '/call/$token'
     | '/app/'
@@ -147,13 +130,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCashRouteImport
       parentRoute: typeof AppRouteRoute
     }
-    '/app/agents': {
-      id: '/app/agents'
-      path: '/agents'
-      fullPath: '/app/agents'
-      preLoaderRoute: typeof AppAgentsRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
     '/app/actions': {
       id: '/app/actions'
       path: '/actions'
@@ -166,14 +142,12 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteRouteChildren {
   AppActionsRoute: typeof AppActionsRoute
-  AppAgentsRoute: typeof AppAgentsRoute
   AppCashRoute: typeof AppCashRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppActionsRoute: AppActionsRoute,
-  AppAgentsRoute: AppAgentsRoute,
   AppCashRoute: AppCashRoute,
   AppIndexRoute: AppIndexRoute,
 }

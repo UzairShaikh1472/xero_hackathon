@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, Bot, Clock, Zap } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, Zap } from "lucide-react";
 
 import { TourAnchor, TOUR_STEPS } from "@/components/control-room/demo-tour";
 import { KpiStrip } from "@/components/control-room/kpi-strip";
@@ -18,7 +18,6 @@ function OverviewPage() {
   const activeAnchor = tourStep !== null ? TOUR_STEPS[tourStep].anchor : null;
   const followUpCount = countFollowUps(data.drafts);
   const overdueCount = data.atRiskInvoices.length;
-  const draftCount = data.drafts.length;
 
   return (
     <div className="space-y-6">
@@ -38,20 +37,13 @@ function OverviewPage() {
         />
       </TourAnchor>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <AttentionCard
           icon={<AlertTriangle className="size-4 text-warning" />}
           title="Overdue receivables"
           count={overdueCount}
           hint="Invoices past due: ranked by recoverable cash"
           to="/app/cash"
-        />
-        <AttentionCard
-          icon={<Bot className="size-4 text-info" />}
-          title="Agent drafts"
-          count={draftCount}
-          hint="AI-drafted messages waiting for your review"
-          to="/app/agents"
         />
         <AttentionCard
           icon={<Zap className="size-4 text-primary" />}
