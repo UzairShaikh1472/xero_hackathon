@@ -1,4 +1,5 @@
 import type { ApiEnvelope, InvoiceRisk, InvoiceRiskSnapshot } from "../domain/types.js";
+import { estimateRecovery } from "../../engines/recovery.js";
 import { getPhaseOneSnapshotData } from "./phase-one-sync-service.js";
 
 function buildRiskScore(daysOverdue: number, amountDue: number) {
@@ -31,6 +32,7 @@ export async function buildInvoiceRiskResponse(): Promise<ApiEnvelope<InvoiceRis
     .map((invoice) => {
       const riskScore = buildRiskScore(invoice.daysOverdue, invoice.amountDue.amount);
       const priority = buildPriority(riskScore);
+      const recovery = estimateRecovery(invoice.amountDue.amount, invoice.daysOverdue);
 
       const item: InvoiceRisk = {
         id: `risk_${invoice.id}`,
@@ -49,12 +51,24 @@ export async function buildInvoiceRiskResponse(): Promise<ApiEnvelope<InvoiceRis
         recommendedAction:
           priority === "high"
             ? "Draft an urgent collection message and route for same-day follow-up."
-            : "Prepare a polite follow-up and monitor payment timing."
+            : "Prepare a polite follow-up and monitor payment timing.",
+        recoveryProbability: recovery.recoveryProbability,
+        expectedDaysToCollect: recovery.expectedDaysToCollect,
+        expectedRecovery: { amount: recovery.expectedRecovery, currency }
       };
 
       return item;
     })
     .sort((left, right) => right.riskScore - left.riskScore);
+
+  // Only invoices that are actually overdue count toward recoverable cash —
+  // the high-value-but-not-yet-due watchlist items aren't "recovery" targets.
+  const totalRecoverableCash = Number(
+    items
+      .filter((item) => item.daysOverdue > 0)
+      .reduce((sum, item) => sum + item.expectedRecovery.amount, 0)
+      .toFixed(2)
+  );
 
   return {
     ok: true,
@@ -64,6 +78,7 @@ export async function buildInvoiceRiskResponse(): Promise<ApiEnvelope<InvoiceRis
       organizationName: snapshot.sync.organizationName ?? "Unknown Organization",
       currency,
       totalAtRisk: items.length,
+      totalRecoverableCash: { amount: totalRecoverableCash, currency },
       items
     }
   };

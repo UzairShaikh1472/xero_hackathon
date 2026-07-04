@@ -12,7 +12,6 @@
   --radius-2xl: calc(var(--radius) + 8px);
 
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
-  --font-display: "Instrument Serif", "Plus Jakarta Sans", serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   --color-background: var(--background);
@@ -103,11 +102,6 @@
   --chart-4: #D97706;
   --chart-5: #C4FF4D;
 
-  --gradient-glow: radial-gradient(
-    circle at 20% 0%,
-    #F1EEE9,
-    transparent 55%
-  );
   --shadow-elevated: 0 4px 20px -4px rgba(0, 0, 0, 0.05);
 }
 
@@ -130,13 +124,11 @@
   h2,
   h3,
   h4 {
-    font-family: var(--font-display);
     letter-spacing: -0.01em;
   }
 }
 
 @utility numeric {
-  font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum", "ss01";
   letter-spacing: -0.02em;

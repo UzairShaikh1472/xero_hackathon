@@ -1,4 +1,23 @@
-import type { ControlRoomData } from "./types";
+import type { ControlRoomData, InvoiceRisk } from "./types";
+
+// Mirrors src/engines/recovery.ts on the backend — kept in sync by hand since
+// this fixture has no access to the backend module.
+function estimateRecovery(amount: number, daysOverdue: number) {
+  const days = Math.max(0, daysOverdue);
+  const baseProbability =
+    days <= 30 ? 0.95 : days <= 60 ? 0.85 : days <= 90 ? 0.7 : days <= 120 ? 0.5 : 0.25;
+  const expectedDaysToCollect = days <= 30 ? 14 : days <= 60 ? 21 : days <= 90 ? 30 : 45;
+  const recoveryProbability = Math.min(0.98, baseProbability * 0.9); // no payment history in demo data
+  const timeDiscount = (0.125 / 365) * expectedDaysToCollect;
+  const expectedRecovery = Number((amount * recoveryProbability * (1 - timeDiscount)).toFixed(2));
+  return { recoveryProbability, expectedDaysToCollect, expectedRecovery };
+}
+
+function withRecovery(
+  invoice: Omit<InvoiceRisk, "recoveryProbability" | "expectedDaysToCollect" | "expectedRecovery">,
+): InvoiceRisk {
+  return { ...invoice, ...estimateRecovery(invoice.amount, invoice.daysOverdue) };
+}
 
 const today = new Date();
 const iso = (d: Date) => d.toISOString();
@@ -29,6 +48,49 @@ const projectedInflow = daily.reduce((s, d) => s + d.inflow, 0);
 const projectedOutflow = daily.reduce((s, d) => s + d.outflow, 0);
 const projectedShortfall = projectedInflow - projectedOutflow;
 
+const atRiskInvoices: InvoiceRisk[] = [
+  {
+    id: "inv-1041",
+    customer: "Northwind Logistics",
+    amount: 12400,
+    daysOverdue: 14,
+    dueDate: daysFromNow(-14),
+    riskScore: 88,
+    reason: "Historically pays in 5 days. 14 days overdue — likely queue error.",
+  },
+  {
+    id: "inv-1039",
+    customer: "Halcyon Foods Ltd",
+    amount: 8750,
+    daysOverdue: 9,
+    dueDate: daysFromNow(-9),
+    riskScore: 74,
+    reason: "Large amount, first late payment in 12 months.",
+  },
+  {
+    id: "inv-1052",
+    customer: "Kestrel Interiors",
+    amount: 5320,
+    daysOverdue: 22,
+    dueDate: daysFromNow(-22),
+    riskScore: 91,
+    reason: "Third overdue invoice this quarter — escalate.",
+  },
+  {
+    id: "inv-1058",
+    customer: "Meridian Print Co.",
+    amount: 3100,
+    daysOverdue: 3,
+    dueDate: daysFromNow(-3),
+    riskScore: 52,
+    reason: "Small variance from typical 30d cycle.",
+  },
+].map(withRecovery);
+
+const recoverableCash = atRiskInvoices
+  .filter((inv) => inv.daysOverdue > 0)
+  .reduce((sum, inv) => sum + inv.expectedRecovery, 0);
+
 export const seedData: ControlRoomData = {
   snapshot: {
     orgName: "Acme Trading Co.",
@@ -38,7 +100,8 @@ export const seedData: ControlRoomData = {
     currency: "GBP",
     currentCash: 48200,
     overdueReceivables: 62480,
-    revenueOpportunityTotal: 41300,
+    recoverableCash,
+    revenueOpportunityTotal: 12800 + 9400 + 7200,
   },
   liquidity: {
     dso: 47,
@@ -50,44 +113,7 @@ export const seedData: ControlRoomData = {
     projectedShortfall,
     daily,
   },
-  atRiskInvoices: [
-    {
-      id: "inv-1041",
-      customer: "Northwind Logistics",
-      amount: 12400,
-      daysOverdue: 14,
-      dueDate: daysFromNow(-14),
-      riskScore: 88,
-      reason: "Historically pays in 5 days. 14 days overdue — likely queue error.",
-    },
-    {
-      id: "inv-1039",
-      customer: "Halcyon Foods Ltd",
-      amount: 8750,
-      daysOverdue: 9,
-      dueDate: daysFromNow(-9),
-      riskScore: 74,
-      reason: "Large amount, first late payment in 12 months.",
-    },
-    {
-      id: "inv-1052",
-      customer: "Kestrel Interiors",
-      amount: 5320,
-      daysOverdue: 22,
-      dueDate: daysFromNow(-22),
-      riskScore: 91,
-      reason: "Third overdue invoice this quarter — escalate.",
-    },
-    {
-      id: "inv-1058",
-      customer: "Meridian Print Co.",
-      amount: 3100,
-      daysOverdue: 3,
-      dueDate: daysFromNow(-3),
-      riskScore: 52,
-      reason: "Small variance from typical 30d cycle.",
-    },
-  ],
+  atRiskInvoices,
   supplierOpportunities: [
     {
       id: "sup-221",
