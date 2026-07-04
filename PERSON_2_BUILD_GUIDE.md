@@ -275,6 +275,8 @@ export async function draftReceivablesNegotiation(risk: InvoiceRisk): Promise<Ne
 
 ### Step 6 — Explanation Layer (Hours 34–38)
 
+**Status: done on `person-2/ai-scoring`.** Deterministic `reason` via `src/agents/reasons.ts` (LLM only writes `draftMessage`).
+
 Add a short `reason` / "Why this action?" field on every draft, still grounded in scores:
 
 - Good: "£8,000 overdue 12 days; reliability 92%; priority score 4.8"
@@ -370,11 +372,11 @@ Stable JSON for:
 
 If time runs out, ship **this** and nothing more:
 
-- [ ] Liquidity gap detection
-- [ ] At-risk invoice ranking
-- [ ] Lapsed customer list
-- [ ] Repeat buyer list
-- [ ] AI draft for receivables negotiation
+- [x] Liquidity gap detection
+- [x] At-risk invoice ranking
+- [x] Lapsed customer list
+- [x] Repeat buyer list
+- [x] AI draft for receivables negotiation
 
 ---
 
