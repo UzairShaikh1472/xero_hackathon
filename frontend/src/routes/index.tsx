@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import {
   Area,
   Bar,
@@ -47,7 +47,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-import { fetchControlRoom, simulateExecute } from "@/lib/kinetic/api";
+import { fetchControlRoom, fetchHealth, fetchXeroAuthUrl, simulateExecute } from "@/lib/kinetic/api";
 import { gbp, pct, timeAgo } from "@/lib/kinetic/format";
 import type {
   ExecutionResult,
@@ -58,21 +58,88 @@ import type {
 const controlRoomQuery = queryOptions({
   queryKey: ["kinetic", "control-room"],
   queryFn: () => fetchControlRoom(),
+  staleTime: 60_000,
+  refetchOnWindowFocus: false,
+});
+
+const healthQuery = queryOptions({
+  queryKey: ["kinetic", "health"],
+  queryFn: () => fetchHealth(),
+  staleTime: 30_000,
 });
 
 export const Route = createFileRoute("/")({
-  loader: ({ context }) => context.queryClient.ensureQueryData(controlRoomQuery),
   component: ControlRoom,
 });
 
 // ────────────────────────────────────────────────────────────────────────────
 
 function ControlRoom() {
-  const { data } = useSuspenseQuery(controlRoomQuery);
+  const { data, isPending, isError, error, refetch, isFetching } =
+    useQuery(controlRoomQuery);
+  const { data: health } = useQuery(healthQuery);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("xero") === "connected") {
+      refetch();
+      params.delete("xero");
+      const next = params.toString();
+      window.history.replaceState(
+        {},
+        "",
+        next ? `${window.location.pathname}?${next}` : window.location.pathname,
+      );
+    }
+  }, [refetch]);
   const [openDraft, setOpenDraft] = useState<NegotiationDraft | null>(null);
   const [executions, setExecutions] = useState<ExecutionResult[]>([]);
   const [tourStep, setTourStep] = useState<number | null>(null);
+  const [connectingXero, setConnectingXero] = useState(false);
 
+  const handleConnectXero = async () => {
+    setConnectingXero(true);
+    try {
+      const status = health ?? (await fetchHealth());
+      if (!status.xeroConfigured) {
+        alert(
+          "Xero is not configured on the backend.\n\nAdd XERO_CLIENT_ID and XERO_CLIENT_SECRET to .env (from developer.xero.com), set the redirect URI to http://localhost:3001/api/xero/callback, then restart the backend.",
+        );
+        return;
+      }
+      const authUrl = await fetchXeroAuthUrl();
+      window.location.href = authUrl;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not start Xero connection");
+    } finally {
+      setConnectingXero(false);
+    }
+  };
+
+  if (isPending) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background text-foreground">
+        <RefreshCw className="size-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Syncing with Xero…</p>
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-4 text-foreground">
+        <AlertTriangle className="size-8 text-critical" />
+        <p className="text-center text-sm text-muted-foreground">
+          {error instanceof Error
+            ? error.message
+            : "Could not load dashboard data from the backend."}
+        </p>
+        <Button size="sm" onClick={() => refetch()} disabled={isFetching}>
+          <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   const executedTotal = executions.reduce((s, e) => s + e.cashImpact, 0);
   const projectedShortfall = data.liquidity.projectedShortfall + executedTotal;
@@ -95,6 +162,11 @@ function ControlRoom() {
         orgName={data.snapshot.orgName}
         mode={data.snapshot.mode}
         lastSyncAt={data.snapshot.lastSyncAt}
+        xeroConfigured={health?.xeroConfigured ?? false}
+        isFetching={isFetching}
+        connectingXero={connectingXero}
+        onConnectXero={handleConnectXero}
+        onRefresh={() => refetch()}
         onReset={() => {
           setExecutions([]);
           setTourStep(null);
@@ -106,6 +178,7 @@ function ControlRoom() {
       <main className="mx-auto max-w-[1440px] px-4 py-6 space-y-6 sm:px-6">
         <TourAnchor id="kpi" active={activeAnchor === "kpi"}>
           <KpiStrip
+            mode={data.snapshot.mode}
             currentCash={data.snapshot.currentCash + executedTotal}
             projectedShortfall={projectedShortfall}
             baselineShortfall={data.liquidity.projectedShortfall}
@@ -142,7 +215,7 @@ function ControlRoom() {
 
         <footer className="pt-6 pb-10 text-center text-xs text-muted-foreground">
           UpFlow · deterministic financial logic + agentic recommendations ·
-          demo dataset
+          {data.snapshot.mode === "live" ? "live Xero data" : "fallback dataset"}
         </footer>
       </main>
 
@@ -177,12 +250,22 @@ function Header({
   orgName,
   mode,
   lastSyncAt,
+  xeroConfigured,
+  isFetching,
+  connectingXero,
+  onConnectXero,
+  onRefresh,
   onReset,
   onStartTour,
 }: {
   orgName: string;
-  mode: "demo" | "live";
+  mode: "live" | "fallback";
   lastSyncAt: string;
+  xeroConfigured: boolean;
+  isFetching: boolean;
+  connectingXero: boolean;
+  onConnectXero: () => void;
+  onRefresh: () => void;
   onReset: () => void;
   onStartTour: () => void;
 }) {
@@ -226,15 +309,38 @@ function Header({
             variant="outline"
             className={cn(
               "gap-1.5 border-hairline",
-              mode === "live" ? "text-positive" : "text-warning",
+              mode === "live"
+                ? "border-positive/30 bg-positive/10 text-positive"
+                : "text-warning",
             )}
           >
             <CircleDot className="size-3" />
-            {mode === "live" ? "Live data" : "Demo dataset"}
+            {mode === "live" ? "Live from Xero" : "Demo Dataset"}
           </Badge>
+          {mode === "fallback" && xeroConfigured && (
+            <Button size="sm" onClick={onConnectXero} disabled={connectingXero}>
+              <RefreshCw className={cn("size-3.5", connectingXero && "animate-spin")} />
+              Connect Xero
+            </Button>
+          )}
+          {mode === "fallback" && !xeroConfigured && (
+            <span className="text-xs text-muted-foreground">
+              Add Xero credentials to .env
+            </span>
+          )}
           <Button size="sm" onClick={onStartTour}>
             <Play className="size-3.5" />
             Start demo
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isFetching}
+            className="text-muted-foreground"
+          >
+            <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
+            <span className="sr-only sm:not-sr-only">Refresh</span>
           </Button>
           <Button
             variant="ghost"
@@ -256,6 +362,7 @@ function Header({
 // KPI strip
 
 function KpiStrip({
+  mode,
   currentCash,
   projectedShortfall,
   baselineShortfall,
@@ -263,6 +370,7 @@ function KpiStrip({
   opportunityTotal,
   executedTotal,
 }: {
+  mode: "live" | "fallback";
   currentCash: number;
   projectedShortfall: number;
   baselineShortfall: number;
@@ -284,7 +392,7 @@ function KpiStrip({
           </h2>
         </div>
         <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-          Live from Xero
+          {mode === "live" ? "Live from Xero" : "Demo dataset"}
         </span>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -405,11 +513,11 @@ function CashFlowLens({
       />
 
       <div className="mt-5 grid grid-cols-3 gap-3">
-        <MetricTile label="DSO" value={`${data.liquidity.dso}d`} hint="Days sales outstanding" />
-        <MetricTile label="DPO" value={`${data.liquidity.dpo}d`} hint="Days payables outstanding" />
+        <MetricTile label="DSO" value={`${data.liquidity.dso.toFixed(1)}d`} hint="Days sales outstanding" />
+        <MetricTile label="DPO" value={`${data.liquidity.dpo.toFixed(1)}d`} hint="Days payables outstanding" />
         <MetricTile
           label="CCC"
-          value={`${data.liquidity.ccc}d`}
+          value={`${data.liquidity.ccc.toFixed(1)}d`}
           hint="Cash conversion cycle"
           tone={data.liquidity.ccc > 10 ? "warning" : "positive"}
         />
