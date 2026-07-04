@@ -22,6 +22,8 @@ import {
   ChevronRight,
   CircleDot,
   Landmark,
+  Mail,
+  Phone,
   Play,
   RefreshCw,
   TrendingDown,
@@ -48,7 +50,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 import { fetchControlRoom, fetchHealth, fetchXeroAuthUrl, simulateExecute } from "@/lib/kinetic/api";
+import { executeEscalationAction } from "@/lib/kinetic/escalation-api";
+import type { RowActionStatus } from "@/lib/kinetic/escalation-types";
 import { gbp, pct, timeAgo } from "@/lib/kinetic/format";
+import { JoinCallModal } from "@/components/JoinCallModal";
+import { toast } from "sonner";
 import type {
   ExecutionResult,
   NegotiationDraft,
@@ -190,7 +196,7 @@ function ControlRoom() {
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <TourAnchor id="cash" active={activeAnchor === "cash"}>
-            <CashFlowLens data={data} onOpen={setOpenDraft} />
+            <CashFlowLens data={data} />
           </TourAnchor>
           <TourAnchor id="revenue" active={activeAnchor === "revenue"}>
             <RevenueLens data={data} onOpen={setOpenDraft} />
@@ -493,16 +499,51 @@ function KpiCard({
 
 function CashFlowLens({
   data,
-  onOpen,
 }: {
   data: Awaited<ReturnType<typeof fetchControlRoom>>;
-  onOpen: (d: NegotiationDraft) => void;
 }) {
-  const draftByInvoice = useMemo(() => {
-    const m = new Map<string, NegotiationDraft>();
-    data.drafts.forEach((d) => m.set(d.targetName, d));
-    return m;
-  }, [data.drafts]);
+  const [actionByInvoice, setActionByInvoice] = useState<
+    Record<string, { status: RowActionStatus; message?: string }>
+  >({});
+  const [joinCall, setJoinCall] = useState<{
+    invoiceId: string;
+    contactName: string;
+  } | null>(null);
+
+  const handleInvoiceAction = async (inv: (typeof data.atRiskInvoices)[number]) => {
+    setActionByInvoice((prev) => ({
+      ...prev,
+      [inv.id]: { status: "loading" },
+    }));
+    try {
+      const result = await executeEscalationAction(inv.id);
+      const isCall = result.actionType === "call_scheduling";
+      const message = isCall
+        ? `Call request sent to ${result.to}`
+        : `Reminder sent to ${result.to}`;
+
+      setActionByInvoice((prev) => ({
+        ...prev,
+        [inv.id]: {
+          status: isCall ? "call_scheduled" : "email_sent",
+          message,
+        },
+      }));
+
+      toast.success(
+        isCall
+          ? `Call request sent to ${inv.customer}`
+          : `Reminder sent to ${inv.customer}`,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Action failed";
+      setActionByInvoice((prev) => ({
+        ...prev,
+        [inv.id]: { status: "error", message },
+      }));
+      toast.error(message);
+    }
+  };
 
   return (
     <section className="panel p-6">
@@ -607,7 +648,13 @@ function CashFlowLens({
         </div>
         <div className="divide-y divide-hairline">
           {data.atRiskInvoices.map((inv) => {
-            const draft = draftByInvoice.get(inv.customer);
+            const rowAction = actionByInvoice[inv.id] ?? { status: "idle" as const };
+            const isCallEscalation = inv.daysOverdue >= 14;
+            const actionDisabled =
+              rowAction.status === "loading" ||
+              rowAction.status === "email_sent" ||
+              rowAction.status === "call_scheduled";
+
             return (
               <div
                 key={inv.id}
@@ -623,6 +670,18 @@ function CashFlowLens({
                   <div className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
                     {inv.reason}
                   </div>
+                  {rowAction.message && (
+                    <div
+                      className={cn(
+                        "mt-1 text-xs",
+                        rowAction.status === "error"
+                          ? "text-critical"
+                          : "text-positive",
+                      )}
+                    >
+                      {rowAction.message}
+                    </div>
+                  )}
                 </div>
                 <div className="numeric text-right shrink-0">
                   <div className="font-medium">{gbp(inv.amount)}</div>
@@ -630,24 +689,70 @@ function CashFlowLens({
                     {inv.daysOverdue}d overdue
                   </div>
                 </div>
-                <div className="col-span-2 flex items-center justify-between gap-2 sm:col-span-1 sm:contents">
+                <div className="col-span-2 flex items-center justify-end gap-2 sm:col-span-1 sm:contents">
                   <RiskPill score={inv.riskScore} />
-                  <Button
-                    size="sm"
-                    variant={draft ? "default" : "outline"}
-                    disabled={!draft}
-                    onClick={() => draft && onOpen(draft)}
-                    className={cn(!draft && "border-hairline")}
-                  >
-                    {draft ? "Review draft" : "No draft"}
-                    <ChevronRight className="size-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {rowAction.status === "call_scheduled" && (
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          setJoinCall({
+                            invoiceId: inv.id,
+                            contactName: inv.customer,
+                          })
+                        }
+                        className="bg-positive hover:bg-positive/90 text-white"
+                      >
+                        <Phone className="size-3.5" />
+                        Join Call
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant={
+                        rowAction.status === "email_sent" ||
+                        rowAction.status === "call_scheduled"
+                          ? "outline"
+                          : "default"
+                      }
+                      disabled={actionDisabled}
+                      onClick={() => void handleInvoiceAction(inv)}
+                      className={cn(
+                        (rowAction.status === "email_sent" ||
+                          rowAction.status === "call_scheduled") &&
+                          "border-positive/40 text-positive",
+                      )}
+                    >
+                      {rowAction.status === "email_sent" ||
+                      rowAction.status === "call_scheduled" ? (
+                        <CheckCircle2 className="size-3.5" />
+                      ) : isCallEscalation ? (
+                        <Phone className="size-3.5" />
+                      ) : (
+                        <Mail className="size-3.5" />
+                      )}
+                      {rowAction.status === "loading"
+                        ? "Sending…"
+                        : rowAction.status === "email_sent" ||
+                            rowAction.status === "call_scheduled"
+                          ? "Done"
+                          : "Action"}
+                      <ChevronRight className="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      <JoinCallModal
+        invoiceId={joinCall?.invoiceId ?? null}
+        contactName={joinCall?.contactName ?? ""}
+        open={joinCall !== null}
+        onClose={() => setJoinCall(null)}
+      />
     </section>
   );
 }
