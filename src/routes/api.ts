@@ -10,10 +10,11 @@ import { buildExecutionHistoryResponse } from "../lib/services/execution-history
 import { buildHealthResponse } from "../lib/services/health-service.js";
 import { buildInvoiceRiskResponse } from "../lib/services/invoice-risk-service.js";
 import { buildLiquidityResponse } from "../lib/services/liquidity-service.js";
-import { getPhaseOneSnapshot, handleOAuthCallback } from "../lib/services/phase-one-sync-service.js";
+import { clearSnapshotCache, getPhaseOneSnapshot, handleOAuthCallback } from "../lib/services/phase-one-sync-service.js";
 import { buildRevenueOpportunitiesResponse } from "../lib/services/revenue-opportunities-service.js";
 import { buildSummaryResponse } from "../lib/services/summary-service.js";
 import { getBackendMode } from "../lib/config/runtime-mode.js";
+import { isXeroConfigured } from "../lib/config/xero-config.js";
 import { buildAuthUrl } from "../lib/xero/auth.js";
 import { clearTokenSet } from "../lib/xero/session-store.js";
 import { HttpError } from "../lib/utils/http-error.js";
@@ -72,6 +73,18 @@ apiRouter.get("/executions/history", async (_request, response, next) => {
 });
 
 apiRouter.get("/xero/auth-url", (_request, response) => {
+  if (!isXeroConfigured()) {
+    return response.status(503).json({
+      ok: false,
+      mode: "fallback",
+      generatedAt: new Date().toISOString(),
+      data: {
+        message:
+          "Xero not configured. Set XERO_CLIENT_ID and XERO_CLIENT_SECRET in .env, then restart the backend."
+      }
+    });
+  }
+
   response.json({
     ok: true,
     mode: getBackendMode(),
@@ -95,14 +108,10 @@ apiRouter.get("/xero/callback", async (request, response, next) => {
       throw new HttpError(400, "Invalid Xero OAuth state");
     }
 
-    const result = await handleOAuthCallback(code);
+    await handleOAuthCallback(code);
+    clearSnapshotCache();
 
-    response.json({
-      ok: true,
-      mode: getBackendMode(),
-      generatedAt: new Date().toISOString(),
-      data: result
-    });
+    response.redirect("http://localhost:8080/?xero=connected");
   } catch (error) {
     next(error);
   }
@@ -155,6 +164,7 @@ apiRouter.post("/simulate/execute", async (request, response, next) => {
 
 apiRouter.post("/xero/disconnect", (_request, response) => {
   clearTokenSet();
+  clearSnapshotCache();
   response.json({
     ok: true,
     mode: getBackendMode(),
