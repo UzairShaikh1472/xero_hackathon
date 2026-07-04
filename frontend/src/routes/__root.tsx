@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -93,9 +93,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "UpFlow" },
-      { name: "description", content: "AI-powered liquidity and revenue acceleration for small businesses on Xero. Detect cash gaps, prioritise collections, and unlock lapsed revenue." },
-      { property: "og:description", content: "AI-powered liquidity and revenue acceleration for small businesses on Xero. Detect cash gaps, prioritise collections, and unlock lapsed revenue." },
-      { name: "twitter:description", content: "AI-powered liquidity and revenue acceleration for small businesses on Xero. Detect cash gaps, prioritise collections, and unlock lapsed revenue." },
+      {
+        name: "twitter:description",
+        content:
+          "Detect cash gaps, prioritise collections, unlock lapsed revenue. Built on Xero.",
+      },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/0e454066-d286-4e80-866d-c2ae8fb5f57e/id-preview-4320e6a1--90af0823-1a24-4f17-bbff-1cffeb98192b.lovable.app-1783171213853.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/0e454066-d286-4e80-866d-c2ae8fb5f57e/id-preview-4320e6a1--90af0823-1a24-4f17-bbff-1cffeb98192b.lovable.app-1783171213853.png" },
     ],
@@ -118,11 +120,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <head>
+    <html lang="en" suppressHydrationWarning>
+      <head suppressHydrationWarning>
         <HeadContent />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         {children}
         <Scripts />
       </body>
@@ -131,13 +133,11 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Toaster position="bottom-center" />
-    </QueryClientProvider>
+    </>
   );
 }
