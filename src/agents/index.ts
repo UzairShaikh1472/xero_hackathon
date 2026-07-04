@@ -1,6 +1,12 @@
 export { draftReceivablesNegotiation } from "./receivablesNegotiator.js";
 export { draftPayablesNegotiation } from "./payablesNegotiator.js";
 export { draftReengagementQuote } from "./reengagementAgent.js";
+export { getNegotiationMessage } from "./negotiators.js";
+export type {
+  NegotiationKind,
+  InvoiceNegotiationContext,
+  NegotiationMessage,
+} from "./negotiators.js";
 export {
   receivablesReason,
   payablesReason,
