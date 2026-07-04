@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { CircleDot, Play, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +33,7 @@ export function Header({
     <header className="border-b hairline bg-surface/60 backdrop-blur">
       <div className="mx-auto grid max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 sm:flex sm:flex-wrap sm:justify-between sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
+          <Link to="/" className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path
                 d="M7 19H14M10.5 19V11.5C10.5 8.5 12 7 14.5 7"
@@ -49,12 +50,14 @@ export function Header({
                 strokeLinejoin="round"
               />
             </svg>
-          </div>
+          </Link>
           <div className="min-w-0">
-            <span className="text-lg font-semibold">UpFlow</span>
+            <Link to="/" className="text-lg font-semibold hover:underline">
+              UpFlow
+            </Link>
             <div className="truncate text-sm text-muted-foreground">
               Connected to <span className="text-foreground">{orgName}</span> via Xero ·
-              last sync {timeAgo(lastSyncAt)}
+              last sync <span suppressHydrationWarning>{timeAgo(lastSyncAt)}</span>
             </div>
           </div>
         </div>

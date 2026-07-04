@@ -13,7 +13,7 @@ export function LensHeader({
   right?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex items-start gap-3">
         <div className="grid size-8 place-items-center rounded-xl bg-secondary text-foreground">
           {icon}

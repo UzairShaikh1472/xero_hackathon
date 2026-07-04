@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Activity, AlertTriangle, ChevronRight, RefreshCw, Repeat } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,20 @@ import type {
 } from "@/lib/kinetic/types";
 
 import { LensHeader } from "./shared";
+
+type CashLensCategory = "overdue" | "loyalty" | "reactivation";
+
+const DEFAULT_VISIBLE: CashLensCategory[] = ["overdue", "loyalty", "reactivation"];
+
+const CATEGORY_FILTERS: Array<{
+  key: CashLensCategory;
+  label: string;
+  icon: React.ReactNode;
+}> = [
+  { key: "overdue", label: "Overdue", icon: <AlertTriangle className="size-3.5" /> },
+  { key: "loyalty", label: "Loyalty potential", icon: <Repeat className="size-3.5" /> },
+  { key: "reactivation", label: "Reactivation", icon: <RefreshCw className="size-3.5" /> },
+];
 
 /** Independent per-category lists. Overdue can overlap with the other two
  * (a customer can owe money AND be a loyalty/reactivation candidate) — that's
@@ -44,13 +58,59 @@ function categorizeCustomers(data: ControlRoomData) {
   return { overdue, loyalty, reactivation };
 }
 
+function CategoryFilter({
+  value,
+  onChange,
+  counts,
+}: {
+  value: CashLensCategory[];
+  onChange: (value: CashLensCategory[]) => void;
+  counts: Record<CashLensCategory, number>;
+}) {
+  const toggle = (key: CashLensCategory) => {
+    onChange(
+      value.includes(key) ? value.filter((item) => item !== key) : [...value, key],
+    );
+  };
+
+  return (
+    <div className="flex flex-wrap justify-start gap-1">
+      {CATEGORY_FILTERS.map(({ key, label, icon }) => {
+        const selected = value.includes(key);
+        return (
+          <Button
+            key={key}
+            type="button"
+            size="sm"
+            variant={selected ? "default" : "outline"}
+            aria-pressed={selected}
+            aria-label={label}
+            className={cn("gap-1.5", !selected && "border-hairline")}
+            onClick={() => toggle(key)}
+          >
+            {icon}
+            {label}
+            <span className={cn(!selected && "text-muted-foreground")}>
+              ({counts[key]})
+            </span>
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function CashRevenueLens({
   data,
   onOpen,
+  highlightCustomer,
 }: {
   data: ControlRoomData;
   onOpen: (d: NegotiationDraft) => void;
+  highlightCustomer?: string;
 }) {
+  const [visibleCategories, setVisibleCategories] = useState<CashLensCategory[]>(DEFAULT_VISIBLE);
+
   const draftByName = useMemo(() => {
     const m = new Map<string, NegotiationDraft>();
     data.drafts.forEach((d) => m.set(d.targetName, d));
@@ -58,6 +118,7 @@ export function CashRevenueLens({
   }, [data.drafts]);
 
   const { overdue, loyalty, reactivation } = useMemo(() => categorizeCustomers(data), [data]);
+  const showNothing = visibleCategories.length === 0;
 
   return (
     <section className="panel p-6">
@@ -65,25 +126,50 @@ export function CashRevenueLens({
         icon={<Activity className="size-4" />}
         title="Cash & Revenue Lens"
         subtitle="Liquidity signals and revenue opportunities from Xero, by customer"
+        right={
+          <CategoryFilter
+            value={visibleCategories}
+            onChange={setVisibleCategories}
+            counts={{
+              overdue: overdue.length,
+              loyalty: loyalty.length,
+              reactivation: reactivation.length,
+            }}
+          />
+        }
       />
 
-      <Section icon={<AlertTriangle className="size-3.5" />} title="Overdue" hint="ranked by recoverable cash — already factors in collection confidence" count={overdue.length}>
-        {overdue.map((inv) => (
-          <OverdueRow key={inv.id} invoice={inv} draft={draftByName.get(inv.customer)} onOpen={onOpen} />
-        ))}
-      </Section>
+      {showNothing ? (
+        <p className="mt-6 text-sm text-muted-foreground">
+          Select at least one category to view customers.
+        </p>
+      ) : (
+        <>
+          {visibleCategories.includes("overdue") && (
+            <Section icon={<AlertTriangle className="size-3.5" />} title="Overdue" hint="ranked by recoverable cash: already factors in collection confidence" count={overdue.length}>
+              {overdue.map((inv) => (
+                <OverdueRow key={inv.id} invoice={inv} draft={draftByName.get(inv.customer)} onOpen={onOpen} highlighted={inv.customer === highlightCustomer} />
+              ))}
+            </Section>
+          )}
 
-      <Section icon={<Repeat className="size-3.5" />} title="Loyalty potential" hint="still buying — ranked by upsell value" count={loyalty.length}>
-        {loyalty.map((c) => (
-          <RepeatRow key={c.id} customer={c} draft={draftByName.get(c.name)} onOpen={onOpen} />
-        ))}
-      </Section>
+          {visibleCategories.includes("loyalty") && (
+            <Section icon={<Repeat className="size-3.5" />} title="Loyalty potential" hint="still buying: ranked by upsell value" count={loyalty.length}>
+              {loyalty.map((c) => (
+                <RepeatRow key={c.id} customer={c} draft={draftByName.get(c.name)} onOpen={onOpen} highlighted={c.name === highlightCustomer} />
+              ))}
+            </Section>
+          )}
 
-      <Section icon={<RefreshCw className="size-3.5" />} title="Reactivation" hint="gone quiet — ranked by days silent" count={reactivation.length}>
-        {reactivation.map((c) => (
-          <LapsedRow key={c.id} customer={c} draft={draftByName.get(c.name)} onOpen={onOpen} />
-        ))}
-      </Section>
+          {visibleCategories.includes("reactivation") && (
+            <Section icon={<RefreshCw className="size-3.5" />} title="Reactivation" hint="gone quiet: ranked by days silent" count={reactivation.length}>
+              {reactivation.map((c) => (
+                <LapsedRow key={c.id} customer={c} draft={draftByName.get(c.name)} onOpen={onOpen} highlighted={c.name === highlightCustomer} />
+              ))}
+            </Section>
+          )}
+        </>
+      )}
     </section>
   );
 }
@@ -125,6 +211,7 @@ function RowShell({
   amount,
   draft,
   onOpen,
+  highlighted,
 }: {
   name: string;
   tag?: string;
@@ -132,9 +219,15 @@ function RowShell({
   amount?: React.ReactNode;
   draft?: NegotiationDraft;
   onOpen: (d: NegotiationDraft) => void;
+  highlighted?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+    <div
+      className={cn(
+        "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center",
+        highlighted && "rounded-lg bg-primary/5 ring-1 ring-primary/20 -mx-2 px-2",
+      )}
+    >
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium truncate">{name}</span>
@@ -143,7 +236,9 @@ function RowShell({
         <div className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{subtitle}</div>
       </div>
       <div className="col-span-2 flex items-center justify-between gap-3 sm:col-span-1 sm:contents">
-        <div className="numeric text-right shrink-0 space-y-0.5">{amount}</div>
+        {amount != null && (
+          <div className="numeric text-right shrink-0 space-y-0.5">{amount}</div>
+        )}
         <Button
           size="sm"
           variant={draft ? "default" : "outline"}
@@ -163,10 +258,12 @@ function OverdueRow({
   invoice,
   draft,
   onOpen,
+  highlighted,
 }: {
   invoice: InvoiceRisk;
   draft?: NegotiationDraft;
   onOpen: (d: NegotiationDraft) => void;
+  highlighted?: boolean;
 }) {
   return (
     <RowShell
@@ -175,14 +272,7 @@ function OverdueRow({
       subtitle={invoice.reason}
       draft={draft}
       onOpen={onOpen}
-      amount={
-        <>
-          <div className="font-medium text-warning">
-            {gbp(invoice.expectedRecovery)} recoverable in ~{invoice.expectedDaysToCollect}d
-          </div>
-          <div className="text-sm text-muted-foreground">{gbp(invoice.amount)} owed</div>
-        </>
-      }
+      highlighted={highlighted}
     />
   );
 }
@@ -191,10 +281,12 @@ function RepeatRow({
   customer,
   draft,
   onOpen,
+  highlighted,
 }: {
   customer: RepeatBuyer;
   draft?: NegotiationDraft;
   onOpen: (d: NegotiationDraft) => void;
+  highlighted?: boolean;
 }) {
   return (
     <RowShell
@@ -202,6 +294,7 @@ function RepeatRow({
       subtitle={`${customer.transactions12m} orders/12m · avg ${gbp(customer.avgInvoice)}`}
       draft={draft}
       onOpen={onOpen}
+      highlighted={highlighted}
       amount={<div className="text-sm text-positive">+{gbp(customer.upsellPotential)} upsell</div>}
     />
   );
@@ -211,10 +304,12 @@ function LapsedRow({
   customer,
   draft,
   onOpen,
+  highlighted,
 }: {
   customer: LapsedCustomer;
   draft?: NegotiationDraft;
   onOpen: (d: NegotiationDraft) => void;
+  highlighted?: boolean;
 }) {
   return (
     <RowShell
@@ -222,6 +317,7 @@ function LapsedRow({
       subtitle={`Lapsed ${customer.daysSilent}d silent`}
       draft={draft}
       onOpen={onOpen}
+      highlighted={highlighted}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Loader2, Phone } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,40 +15,106 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { gbp, pct } from "@/lib/kinetic/format";
-import type { ExecutionResult, NegotiationDraft } from "@/lib/kinetic/types";
+import type {
+  CommunicationResult,
+  ExecutionResult,
+  NegotiationDraft,
+} from "@/lib/kinetic/types";
 
 import { UrgencyDot } from "./shared";
+
+function getDaysOverdue(draft: NegotiationDraft) {
+  if (draft.daysOverdue != null) return draft.daysOverdue;
+  const match = draft.reason.match(/(\d+)\s+days?\s+overdue/i);
+  return match ? Number(match[1]) : 0;
+}
 
 export function ApprovalDrawer({
   draft,
   execution,
+  communication,
+  emailConfigured,
+  browserVoiceConfigured,
   onClose,
   onSimulate,
+  onSendEmail,
+  onSendVoiceInvite,
+  onStartCall,
 }: {
-  draft: NegotiationDraft | null;
+  draft: NegotiationDraft;
   execution: ExecutionResult | null;
+  communication: CommunicationResult | null;
+  emailConfigured: boolean;
+  browserVoiceConfigured: boolean;
   onClose: () => void;
   onSimulate: (d: NegotiationDraft) => void;
+  onSendEmail: (d: NegotiationDraft, edits: { subject: string; body: string }) => Promise<void>;
+  onSendVoiceInvite: (
+    d: NegotiationDraft,
+    edits: { subject: string; body: string },
+  ) => Promise<void>;
+  onStartCall: (d: NegotiationDraft) => Promise<void>;
 }) {
   const [body, setBody] = useState("");
+  const [subject, setSubject] = useState("");
+  const [sending, setSending] = useState(false);
   const activeId = draft?.id;
+
   useEffect(() => {
-    if (draft) setBody(draft.body);
+    if (draft) {
+      setBody(draft.body);
+      setSubject(draft.subject);
+    }
   }, [activeId, draft]);
 
+  const daysOverdue = getDaysOverdue(draft);
+  const canEmail = draft.agent === "receivables" && daysOverdue < 14;
+  const canVoice = draft.agent === "receivables" && daysOverdue >= 14;
+
+  const handleSendEmail = async () => {
+    setSending(true);
+    try {
+      await onSendEmail(draft, { subject, body });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSendVoiceInvite = async () => {
+    setSending(true);
+    try {
+      await onSendVoiceInvite(draft, { subject, body });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleStartCall = async () => {
+    setSending(true);
+    try {
+      await onStartCall(draft);
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
-    <Sheet open={!!draft} onOpenChange={(o) => !o && onClose()}>
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <SheetContent
         side="right"
-        className="w-full sm:max-w-lg bg-surface border-l hairline flex flex-col"
+        className="z-[100] w-full sm:max-w-lg bg-surface border-l hairline flex flex-col"
       >
-        {draft && (
-          <>
-            <SheetHeader>
-              <SheetTitle className="flex items-center gap-2">
-                <UrgencyDot u={draft.urgency} />
-                {draft.agent === "receivables" ? "Collect" : "Extend"} · {draft.targetName}
-              </SheetTitle>
+        <>
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <UrgencyDot u={draft.urgency} />
+              {draft.agent === "receivables" ? "Collect" : "Extend"} · {draft.targetName}
+            </SheetTitle>
               <SheetDescription className="text-muted-foreground">
                 {draft.proposedAction}
               </SheetDescription>
@@ -70,9 +136,20 @@ export function ApprovalDrawer({
                 <Separator className="bg-hairline" />
 
                 <div>
-                  <div className="mb-1 flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground">
-                    <span>Draft message</span>
-                    <span>Subject: {draft.subject}</span>
+                  <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">
+                    Subject
+                  </div>
+                  <Textarea
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    rows={2}
+                    className="bg-surface-2 border-hairline font-sans text-sm"
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">
+                    Draft message
                   </div>
                   <Textarea
                     value={body}
@@ -80,6 +157,9 @@ export function ApprovalDrawer({
                     rows={10}
                     className="bg-surface-2 border-hairline font-sans text-sm"
                   />
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Greeting, invoice summary, and sign-off are added automatically when sent.
+                  </p>
                 </div>
 
                 {execution && (
@@ -89,34 +169,90 @@ export function ApprovalDrawer({
                       Simulated
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">{execution.note}</div>
-                    <div className="mt-2 numeric text-xs">
-                      New projected 30-day gap:{" "}
-                      <span className="text-foreground">
-                        {gbp(execution.newProjectedShortfall)}
-                      </span>
+                  </div>
+                )}
+
+                {communication && (
+                  <div className="rounded-md border border-primary/40 bg-primary/10 p-3 text-sm">
+                    <div className="flex items-center gap-2 font-medium text-primary">
+                      <CheckCircle2 className="size-4" />
+                      {communication.channel === "voice_invite"
+                        ? "Voice invite sent"
+                        : "Email sent"}
                     </div>
+                    <div className="mt-1 text-xs text-muted-foreground">{communication.message}</div>
+                    {communication.callUrl && (
+                      <a
+                        href={communication.callUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-block text-xs text-primary underline"
+                      >
+                        Open call link
+                      </a>
+                    )}
                   </div>
                 )}
               </div>
             </ScrollArea>
 
-            <SheetFooter className="flex-row justify-between border-t hairline pt-4">
-              <Button variant="ghost" onClick={onClose}>
-                Close
-              </Button>
-              <div className="flex gap-2">
+            <SheetFooter className="flex-col gap-3 border-t hairline pt-4 sm:flex-col sm:justify-start">
+              <div className="flex w-full flex-wrap justify-between gap-2">
+                <Button variant="ghost" onClick={onClose}>
+                  Close
+                </Button>
                 <Button
                   variant="outline"
                   onClick={() => onSimulate(draft)}
                   className="border-hairline"
+                  disabled={sending}
                 >
                   Simulate execution
                 </Button>
-                <Button onClick={() => onSimulate(draft)}>Approve & send</Button>
               </div>
+
+              <div className="flex w-full flex-wrap gap-2">
+                {canEmail && (
+                  <Button
+                    onClick={() => void handleSendEmail()}
+                    disabled={sending || !emailConfigured}
+                    className="flex-1"
+                  >
+                    {sending ? <Loader2 className="size-4 animate-spin" /> : null}
+                    Approve & send email
+                  </Button>
+                )}
+
+                {canVoice && (
+                  <>
+                    <Button
+                      onClick={() => void handleSendVoiceInvite()}
+                      disabled={sending || !emailConfigured || !browserVoiceConfigured}
+                      className="flex-1"
+                    >
+                      {sending ? <Loader2 className="size-4 animate-spin" /> : null}
+                      Send voice invite
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleStartCall()}
+                      disabled={sending || !browserVoiceConfigured}
+                      className="flex-1 border-hairline"
+                    >
+                      <Phone className="size-4" />
+                      Start call now
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {canEmail && !emailConfigured && (
+                <p className="text-xs text-muted-foreground">
+                  Configure SMTP_* and COMMUNICATIONS_TEST_EMAIL in backend .env to send real emails.
+                </p>
+              )}
             </SheetFooter>
-          </>
-        )}
+        </>
       </SheetContent>
     </Sheet>
   );

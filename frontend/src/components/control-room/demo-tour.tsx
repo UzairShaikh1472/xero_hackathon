@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export type TourAnchorId = "kpi" | "cash" | "agents";
+
+const TOUR_ROUTES: Record<TourAnchorId, string> = {
+  kpi: "/app",
+  cash: "/app/cash",
+  agents: "/app/agents",
+};
 
 interface TourStep {
   anchor: TourAnchorId;
@@ -19,19 +26,19 @@ export const TOUR_STEPS: TourStep[] = [
     anchor: "kpi",
     title: "The 30-second read",
     body:
-      "Acme has £48k on hand today. £62k of overdue receivables is stuck money — Recoverable cash discounts it for collection risk and delay, and Projected cash shows what your balance becomes if that recovery, plus other revenue opportunities, actually lands.",
+      "Acme has £48k on hand today. £62k of overdue receivables is stuck money. Recoverable cash discounts it for collection risk and delay, and Projected cash shows what your balance becomes if that recovery, plus other revenue opportunities, actually lands.",
   },
   {
     anchor: "cash",
-    title: "Cash & Revenue Lens — Overdue, Loyalty, Reactivation",
+    title: "Cash & Revenue Lens: Overdue, Loyalty, Reactivation",
     body:
-      "Overdue invoices, still-buying customers worth upselling, and gone-quiet customers worth winning back are tracked separately below. Northwind Logistics shows up in both Overdue and Loyalty potential — same customer, two unrelated facts about them.",
+      "Overdue invoices, still-buying customers worth upselling, and gone-quiet customers worth winning back are tracked separately below. Northwind Logistics shows up in both Overdue and Loyalty potential: same customer, two unrelated facts about them.",
   },
   {
     anchor: "agents",
     title: "Agents draft the action",
     body:
-      "Rules identified the risk. AI drafts the message — subject, body, tone, expected cash impact, confidence. Open Northwind's draft to review, then simulate execution to see the post-execution cash impact before it touches Xero.",
+      "Rules identified the risk. AI drafts the message: subject, body, tone, expected cash impact, confidence. Open Northwind's draft to review, then simulate execution to see the post-execution cash impact before it touches Xero.",
     action: "Open a draft →",
   },
 ];
@@ -69,11 +76,18 @@ export function DemoTour({
   onPrev: () => void;
   onClose: () => void;
 }) {
+  const navigate = useNavigate();
+
   useEffect(() => {
     if (step === null) return;
-    const el = document.getElementById(`tour-${TOUR_STEPS[step].anchor}`);
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [step]);
+    const anchor = TOUR_STEPS[step].anchor;
+    navigate({ to: TOUR_ROUTES[anchor] });
+    const timer = window.setTimeout(() => {
+      const el = document.getElementById(`tour-${anchor}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [step, navigate]);
 
   if (step === null) return null;
   const s = TOUR_STEPS[step];
