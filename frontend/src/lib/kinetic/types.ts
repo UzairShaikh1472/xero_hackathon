@@ -76,6 +76,7 @@ export type DraftActionType =
 
 export type AgentKind = "receivables" | "payables" | "reengagement";
 export type Urgency = "low" | "medium" | "high" | "critical";
+export type FollowUpChannel = "email" | "agent_call" | "human_call";
 
 export interface NegotiationDraft {
   id: string;
@@ -83,6 +84,8 @@ export interface NegotiationDraft {
   agent: AgentKind;
   targetName: string;
   targetId: string;
+  /** Receivables drafts — Xero invoice id used for resolved reconciliation. */
+  invoiceId?: string;
   currency: Currency;
   contactEmail?: string;
   contactPhone?: string;
@@ -99,7 +102,7 @@ export interface NegotiationDraft {
 
 export interface CommunicationResult {
   draftId: string;
-  channel: "email" | "call";
+  channel: "email" | "call" | "voice_invite";
   status: "sent" | "queued";
   recipientName: string;
   recipientEmail?: string;
@@ -107,6 +110,10 @@ export interface CommunicationResult {
   providerId?: string;
   message: string;
   scriptPreview?: string;
+  callUrl?: string;
+  callToken?: string;
+  /** Set client-side when the action is recorded in the audit rail. */
+  sentAt?: string;
 }
 
 export interface ExecutionResult {
@@ -126,6 +133,39 @@ export interface AuditEntry {
   target: string;
   rationale: string;
   humanInLoop: boolean;
+}
+
+export type FollowUpChannelType = "email" | "call";
+
+export interface FollowUpRecord {
+  id: string;
+  draftId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  contactName: string;
+  channel: FollowUpChannelType;
+  sentAt: string;
+  expectedCashImpact: number;
+  currency: string;
+}
+
+export interface ResolvedAction {
+  id: string;
+  draftId: string;
+  invoiceId: string;
+  contactName: string;
+  invoiceNumber: string;
+  channel: FollowUpChannelType;
+  sentAt: string;
+  resolvedAt: string;
+  amountCollected: number;
+  currency: string;
+  source: "xero";
+}
+
+export interface FollowUpsData {
+  open: FollowUpRecord[];
+  resolved: ResolvedAction[];
 }
 
 export interface ControlRoomData {
