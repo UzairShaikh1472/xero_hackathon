@@ -1,9 +1,10 @@
 import {
   draftPayablesNegotiation,
   draftReceivablesNegotiation,
-  draftReengagementQuote
+  draftReengagementQuote,
+  reengagementReason
 } from "../../agents/index.js";
-import { analyzeLiquidity, analyzeRevenue } from "../../engines/index.js";
+import { analyzeLiquidity, analyzeRevenue, reactivationChannel } from "../../engines/index.js";
 import { lapsedCustomerScore } from "../../scoring/index.js";
 import type {
   InvoiceRisk as AgentInvoiceRisk,
@@ -318,6 +319,121 @@ export async function buildReceivablesDraftsListResponse(options?: {
   };
 }
 
+function buildReengagementRecommendedAction(
+  channel: ReturnType<typeof reactivationChannel>,
+  offerPercent: number,
+  daysSinceLastActivity: number,
+): string {
+  if (channel === "voice_invite") {
+    return `Send voice-agent invite email — inactive ${daysSinceLastActivity} days (long-lapsed threshold)`;
+  }
+  return `Send win-back email with ${offerPercent}% returning-customer incentive`;
+}
+
+function buildReengagementTemplateDraft(
+  snapshot: Awaited<ReturnType<typeof getPhaseOneSnapshotData>>,
+  contact: (typeof snapshot.contacts)[number],
+  customer: LapsedCustomer,
+  offerPercent: number,
+  tone: string,
+): NegotiationDraft {
+  const currency = snapshot.sync.currency;
+  const channel = reactivationChannel(customer.daysSinceLastActivity);
+  const estimatedValue = Number(
+    (contact.averageInvoice.amount * (1 - offerPercent / 100)).toFixed(2),
+  );
+  const recommendedAction = buildReengagementRecommendedAction(
+    channel,
+    offerPercent,
+    customer.daysSinceLastActivity,
+  );
+
+  const subjectLine =
+    channel === "voice_invite"
+      ? `Let's reconnect, ${contact.name}`
+      : `A tailored offer for ${contact.name}`;
+
+  const draftMessage =
+    channel === "voice_invite"
+      ? `It's been ${customer.daysSinceLastActivity} days since we last worked together and we'd love to hear what you're planning next. Click below to speak with our reactivation agent — we can walk through a refreshed quote with a ${offerPercent}% returning-customer incentive if there's work to restart this month.`
+      : `We would love to work together again. We can put together a refreshed quote with a ${offerPercent}% returning-customer incentive if there is a project you would like to restart this month.`;
+
+  return {
+    id: `draft_reengagement_${contact.id}`,
+    type: "reengagement_quote",
+    targetId: contact.id,
+    targetName: contact.name,
+    currency,
+    priority: customer.daysSinceLastActivity >= 180 ? "high" : "medium",
+    reason: reengagementReason(customer),
+    expectedImpact: {
+      amount: estimatedValue,
+      currency,
+    },
+    subjectLine,
+    draftMessage,
+    metadata: {
+      tone,
+      offerPercent,
+      averageInvoiceValue: contact.averageInvoice.amount,
+      daysSinceLastActivity: customer.daysSinceLastActivity,
+      historicalLTV: customer.historicalLTV,
+      recommendedChannel: channel,
+      organizationName: snapshot.sync.organizationName ?? null,
+      contactEmail: contact.email ?? null,
+      contactPhone: contact.phone ?? null,
+      recommendedAction,
+      agentGenerated: false,
+    },
+  };
+}
+
+export async function buildReengagementDraftsListResponse(options?: {
+  fast?: boolean;
+}): Promise<ApiEnvelope<{ drafts: NegotiationDraft[] }>> {
+  const snapshot = await getPhaseOneSnapshotData();
+  const normalized = snapshotToNormalized(snapshot);
+  const { lapsedCustomers } = analyzeRevenue(normalized);
+  const drafts: NegotiationDraft[] = [];
+
+  for (const customer of lapsedCustomers) {
+    const contact = snapshot.contacts.find((item) => item.id === customer.contactId);
+    if (!contact) {
+      continue;
+    }
+
+    const draftId = `draft_reengagement_${contact.id}`;
+    const cached = getStoredDraft(draftId);
+    if (cached) {
+      drafts.push(cached);
+      continue;
+    }
+
+    if (options?.fast) {
+      const template = buildReengagementTemplateDraft(
+        snapshot,
+        contact,
+        customer,
+        10,
+        "friendly",
+      );
+      persistDraft(template);
+      drafts.push(template);
+      continue;
+    }
+
+    const envelope = await buildReengagementQuoteResponse({ contactId: contact.id });
+    drafts.push(envelope.data);
+  }
+
+  return {
+    ok: true,
+    mode: snapshot.sync.source,
+    generatedAt: new Date().toISOString(),
+    data: { drafts },
+  };
+}
+
 export async function buildPayablesDraftResponse(
   input: PayablesDraftRequest
 ): Promise<ApiEnvelope<NegotiationDraft>> {
@@ -471,48 +587,51 @@ export async function buildReengagementQuoteResponse(
     recommendedAction: `Send re-engagement quote with ${offerPercent}% returning-customer incentive`
   };
 
+  const channel = reactivationChannel(customer.daysSinceLastActivity);
+  const recommendedAction = buildReengagementRecommendedAction(
+    channel,
+    offerPercent,
+    customer.daysSinceLastActivity,
+  );
+  const enrichedCustomer: LapsedCustomer = {
+    ...customer,
+    recommendedAction,
+  };
+
   const draft = await withAgentDraft(
     async () => {
-      const agentDraft = await draftReengagementQuote({
-        ...customer,
-        recommendedAction: `Send re-engagement quote with ${offerPercent}% returning-customer incentive`
-      });
+      const agentDraft = await draftReengagementQuote(enrichedCustomer);
       return toApiDraft(agentDraft, {
         id: `draft_reengagement_${contact.id}`,
         type: "reengagement_quote",
         targetId: contact.id,
         currency,
+        subjectLine:
+          channel === "voice_invite"
+            ? `Let's reconnect, ${contact.name}`
+            : `A tailored offer for ${contact.name}`,
         metadata: {
           tone,
           offerPercent,
           averageInvoiceValue: contact.averageInvoice.amount,
+          daysSinceLastActivity: customer.daysSinceLastActivity,
+          historicalLTV: customer.historicalLTV,
+          recommendedChannel: channel,
+          organizationName: snapshot.sync.organizationName ?? null,
           contactEmail: contact.email ?? null,
-          contactPhone: contact.phone ?? null
-        }
+          contactPhone: contact.phone ?? null,
+          recommendedAction,
+        },
       });
     },
-    () => ({
-      id: `draft_reengagement_${contact.id}`,
-      type: "reengagement_quote",
-      targetId: contact.id,
-      targetName: contact.name,
-      currency,
-      priority: contact.averageInvoice.amount >= 5000 ? "high" : "medium",
-      reason: `${contact.name} has prior invoice history and is a good candidate for a re-engagement offer.`,
-      expectedImpact: {
-        amount: estimatedValue,
-        currency
-      },
-      subjectLine: `A tailored offer for ${contact.name}`,
-      draftMessage: `Hi ${contact.name}, we would love to work together again. We can put together a refreshed quote with a ${offerPercent}% returning-customer incentive if there is a project you would like to restart this month.`,
-      metadata: {
-        tone,
+    () =>
+      buildReengagementTemplateDraft(
+        snapshot,
+        contact,
+        enrichedCustomer,
         offerPercent,
-        averageInvoiceValue: contact.averageInvoice.amount,
-        contactEmail: contact.email ?? null,
-        contactPhone: contact.phone ?? null
-      }
-    })
+        tone,
+      ),
   );
 
   persistDraft(draft);

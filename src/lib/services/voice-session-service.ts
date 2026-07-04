@@ -1,7 +1,10 @@
 import { randomBytes } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 
 import { env } from "../config/env.js";
 import { buildVoiceCollectionSystemPrompt } from "../../agents/voiceCollectionPrompt.js";
+import { buildVoiceReengagementSystemPrompt } from "../../agents/voiceReengagementPrompt.js";
 import type { NegotiationDraft, VoiceSessionContext } from "../domain/types.js";
 import { HttpError } from "../utils/http-error.js";
 
@@ -9,16 +12,57 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 type StoredVoiceSession = {
   draftId: string;
+  draftType?: NegotiationDraft["type"];
   contactName: string;
   invoiceNumber: string;
   amountDue: number;
   currency: string;
   daysOverdue: number;
+  daysSinceLastActivity?: number;
+  historicalLTV?: number;
   discountPercent?: number;
+  offerPercent?: number;
   expiresAt: number;
 };
 
+const sessionFilePath = path.resolve(process.cwd(), ".data", "voice-sessions.json");
+
 const sessions = new Map<string, StoredVoiceSession>();
+
+function loadSessions(): Map<string, StoredVoiceSession> {
+  const loaded = new Map<string, StoredVoiceSession>();
+  try {
+    if (!fs.existsSync(sessionFilePath)) {
+      return loaded;
+    }
+
+    const payload = JSON.parse(fs.readFileSync(sessionFilePath, "utf8")) as Record<
+      string,
+      StoredVoiceSession
+    >;
+    const now = Date.now();
+    for (const [token, session] of Object.entries(payload)) {
+      if (session.expiresAt >= now) {
+        loaded.set(token, session);
+      }
+    }
+  } catch {
+    // Ignore corrupt or unreadable session files.
+  }
+  return loaded;
+}
+
+function persistSessions() {
+  fs.mkdirSync(path.dirname(sessionFilePath), { recursive: true });
+  fs.writeFileSync(
+    sessionFilePath,
+    JSON.stringify(Object.fromEntries(sessions.entries()), null, 2)
+  );
+}
+
+for (const [token, session] of loadSessions()) {
+  sessions.set(token, session);
+}
 
 function getMetadataNumber(draft: NegotiationDraft, field: string) {
   const value = draft.metadata[field];
@@ -34,18 +78,29 @@ export function createVoiceSessionFromDraft(draft: NegotiationDraft) {
   const token = randomBytes(24).toString("hex");
   const daysOverdue = getMetadataNumber(draft, "daysOverdue");
   const discountPercent = getMetadataNumber(draft, "discountPercent") || undefined;
+  const daysSinceLastActivity = getMetadataNumber(draft, "daysSinceLastActivity") || undefined;
+  const historicalLTV = getMetadataNumber(draft, "historicalLTV") || undefined;
+  const offerPercent = getMetadataNumber(draft, "offerPercent") || undefined;
 
   sessions.set(token, {
     draftId: draft.id,
+    draftType: draft.type,
     contactName: draft.targetName,
-    invoiceNumber: getMetadataString(draft, "invoiceNumber") ?? "outstanding invoice",
+    invoiceNumber:
+      draft.type === "reengagement_quote"
+        ? "reactivation"
+        : getMetadataString(draft, "invoiceNumber") ?? "outstanding invoice",
     amountDue: draft.expectedImpact.amount,
     currency: draft.currency,
-    daysOverdue,
+    daysOverdue: draft.type === "reengagement_quote" ? daysSinceLastActivity ?? 0 : daysOverdue,
+    daysSinceLastActivity,
+    historicalLTV,
     discountPercent,
+    offerPercent,
     expiresAt: Date.now() + SESSION_TTL_MS
   });
 
+  persistSessions();
   return token;
 }
 
@@ -56,6 +111,7 @@ function getSessionOrThrow(token: string): StoredVoiceSession {
   }
   if (session.expiresAt < Date.now()) {
     sessions.delete(token);
+    persistSessions();
     throw new HttpError(410, "Call session expired. Request a new voice invite.");
   }
   return session;
@@ -63,14 +119,24 @@ function getSessionOrThrow(token: string): StoredVoiceSession {
 
 export function buildVoiceSessionContext(token: string): VoiceSessionContext {
   const session = getSessionOrThrow(token);
-  const systemPrompt = buildVoiceCollectionSystemPrompt({
-    contactName: session.contactName,
-    invoiceNumber: session.invoiceNumber,
-    amountDue: session.amountDue,
-    currency: session.currency,
-    daysOverdue: session.daysOverdue,
-    discountPercent: session.discountPercent
-  });
+  const systemPrompt =
+    session.draftType === "reengagement_quote"
+      ? buildVoiceReengagementSystemPrompt({
+          contactName: session.contactName,
+          daysSinceLastActivity:
+            session.daysSinceLastActivity ?? session.daysOverdue,
+          historicalLTV: session.historicalLTV ?? session.amountDue,
+          currency: session.currency,
+          offerPercent: session.offerPercent,
+        })
+      : buildVoiceCollectionSystemPrompt({
+          contactName: session.contactName,
+          invoiceNumber: session.invoiceNumber,
+          amountDue: session.amountDue,
+          currency: session.currency,
+          daysOverdue: session.daysOverdue,
+          discountPercent: session.discountPercent,
+        });
 
   return {
     token,

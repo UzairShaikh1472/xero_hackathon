@@ -18,11 +18,16 @@ import { HttpError } from "../utils/http-error.js";
 import { logger } from "../utils/logger.js";
 import { getStoredDraft } from "../utils/idempotency.js";
 import { recordFollowUp } from "../utils/follow-up-store.js";
-import { buildReceivablesDraftResponse } from "./action-service.js";
+import { REACTIVATION_VOICE_THRESHOLD_DAYS } from "../../engines/revenue.js";
+import { buildReceivablesDraftResponse, buildReengagementQuoteResponse } from "./action-service.js";
 import { getPhaseOneSnapshotData } from "./phase-one-sync-service.js";
 import {
   buildPaymentReminderHtml,
   buildPaymentReminderText,
+  buildReactivationEmailHtml,
+  buildReactivationEmailText,
+  buildReactivationVoiceInviteHtml,
+  buildReactivationVoiceInviteText,
   buildVoiceInviteHtml,
   buildVoiceInviteText
 } from "./email-templates.js";
@@ -31,22 +36,41 @@ import {
   createVoiceSessionFromDraft
 } from "./voice-session-service.js";
 
-async function getDraftOrThrow(draftId: string, invoiceId?: string) {
+async function getDraftOrThrow(draftId: string, targetId?: string) {
   const existing = getStoredDraft(draftId);
   if (existing) {
     return existing;
   }
 
-  const resolvedInvoiceId =
-    invoiceId?.trim() ||
+  const resolvedReceivablesId =
+    targetId?.trim() ||
     draftId.match(/^draft_receivables_(.+)$/)?.[1] ||
     "";
 
-  if (resolvedInvoiceId) {
-    logger.info("communications.draft.regenerating", { draftId, invoiceId: resolvedInvoiceId });
+  if (resolvedReceivablesId && draftId.startsWith("draft_receivables_")) {
+    logger.info("communications.draft.regenerating", {
+      draftId,
+      invoiceId: resolvedReceivablesId,
+    });
     const envelope = await buildReceivablesDraftResponse({
-      invoiceId: resolvedInvoiceId,
-      useAgent: false
+      invoiceId: resolvedReceivablesId,
+      useAgent: false,
+    });
+    return envelope.data;
+  }
+
+  const resolvedContactId =
+    targetId?.trim() ||
+    draftId.match(/^draft_reengagement_(.+)$/)?.[1] ||
+    "";
+
+  if (resolvedContactId && draftId.startsWith("draft_reengagement_")) {
+    logger.info("communications.draft.regenerating", {
+      draftId,
+      contactId: resolvedContactId,
+    });
+    const envelope = await buildReengagementQuoteResponse({
+      contactId: resolvedContactId,
     });
     return envelope.data;
   }
@@ -64,33 +88,62 @@ function getMetadataString(draft: NegotiationDraft, field: string) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function ensureReceivablesDraft(draft: NegotiationDraft) {
-  if (draft.type !== "receivables_discount") {
-    throw new HttpError(400, "Only receivables drafts can be sent to clients.");
+function ensureSendableDraft(draft: NegotiationDraft) {
+  if (draft.type !== "receivables_discount" && draft.type !== "reengagement_quote") {
+    throw new HttpError(400, "Only receivables and reactivation drafts can be sent to clients.");
   }
 }
 
 function ensureEmailEligibility(draft: NegotiationDraft) {
-  ensureReceivablesDraft(draft);
-  const daysOverdue = getMetadataNumber(draft, "daysOverdue");
-  if (daysOverdue >= 14) {
-    throw new HttpError(400, "Email reminders are only available for invoices overdue by fewer than 14 days.");
+  ensureSendableDraft(draft);
+
+  if (draft.type === "receivables_discount") {
+    const daysOverdue = getMetadataNumber(draft, "daysOverdue");
+    if (daysOverdue >= 14) {
+      throw new HttpError(
+        400,
+        "Email reminders are only available for invoices overdue by fewer than 14 days.",
+      );
+    }
+    return;
+  }
+
+  const daysSinceLastActivity = getMetadataNumber(draft, "daysSinceLastActivity");
+  if (daysSinceLastActivity >= REACTIVATION_VOICE_THRESHOLD_DAYS) {
+    throw new HttpError(
+      400,
+      `Win-back emails are only available for customers inactive fewer than ${REACTIVATION_VOICE_THRESHOLD_DAYS} days. Use the voice agent invite instead.`,
+    );
   }
 }
 
 function ensureVoiceInviteEligibility(draft: NegotiationDraft) {
-  ensureReceivablesDraft(draft);
-  const daysOverdue = getMetadataNumber(draft, "daysOverdue");
-  if (daysOverdue < 14) {
+  ensureSendableDraft(draft);
+
+  if (draft.type === "receivables_discount") {
+    const daysOverdue = getMetadataNumber(draft, "daysOverdue");
+    if (daysOverdue < 14) {
+      throw new HttpError(
+        400,
+        "Voice invites are only available for invoices overdue by 14 days or more.",
+      );
+    }
+    return;
+  }
+
+  const daysSinceLastActivity = getMetadataNumber(draft, "daysSinceLastActivity");
+  if (daysSinceLastActivity < REACTIVATION_VOICE_THRESHOLD_DAYS) {
     throw new HttpError(
       400,
-      "Voice invites are only available for invoices overdue by 14 days or more."
+      `Voice agent invites are only available for customers inactive ${REACTIVATION_VOICE_THRESHOLD_DAYS} days or more.`,
     );
   }
 }
 
 function ensureCallEligibility(draft: NegotiationDraft) {
-  ensureReceivablesDraft(draft);
+  if (draft.type !== "receivables_discount") {
+    throw new HttpError(400, "Automated phone calls are only available for receivables drafts.");
+  }
   const daysOverdue = getMetadataNumber(draft, "daysOverdue");
   if (daysOverdue < 15) {
     throw new HttpError(400, "Automated calls are only available for invoices overdue by 15 days or more.");
@@ -258,13 +311,41 @@ function escapeXml(value: string) {
 function trackFollowUp(draft: NegotiationDraft, channel: "email" | "call") {
   recordFollowUp({
     draftId: draft.id,
-    invoiceId: draft.targetId,
-    invoiceNumber: getMetadataString(draft, "invoiceNumber") ?? draft.targetId,
+    invoiceId: draft.type === "receivables_discount" ? draft.targetId : draft.id,
+    invoiceNumber:
+      getMetadataString(draft, "invoiceNumber") ??
+      (draft.type === "reengagement_quote" ? "reactivation" : draft.targetId),
     contactName: draft.targetName,
     channel,
     expectedCashImpact: draft.expectedImpact.amount,
     currency: draft.currency,
   });
+}
+
+function buildDraftEmailPayload(
+  draft: NegotiationDraft,
+  snapshot: Awaited<ReturnType<typeof getPhaseOneSnapshotData>>,
+) {
+  if (draft.type === "reengagement_quote") {
+    const offerPercent = getMetadataNumber(draft, "offerPercent");
+    const params = {
+      contactName: draft.targetName,
+      organizationName: resolveOrganizationName(draft, snapshot),
+      body: draft.draftMessage,
+      daysSinceLastActivity: getMetadataNumber(draft, "daysSinceLastActivity"),
+      historicalLTV: getMetadataNumber(draft, "historicalLTV") || draft.expectedImpact.amount,
+      currency: draft.currency,
+      offerPercent: offerPercent > 0 ? offerPercent : undefined,
+      estimatedValue: draft.expectedImpact.amount,
+    };
+
+    return {
+      html: buildReactivationEmailHtml(params),
+      text: buildReactivationEmailText(params),
+    };
+  }
+
+  return buildPaymentReminderPayload(draft, snapshot);
 }
 
 export async function buildSendDraftEmailResponse(
@@ -285,7 +366,7 @@ export async function buildSendDraftEmailResponse(
 
   const contactEmail = getMetadataString(draft, "contactEmail");
   const recipientEmail = resolveDraftRecipient(draft);
-  const { html, text } = buildPaymentReminderPayload(draft, snapshot);
+  const { html, text } = buildDraftEmailPayload(draft, snapshot);
 
   const info = await sendWithSmtp(draft, recipientEmail, { html, text });
   logger.info("communications.email.sent", {
@@ -296,6 +377,9 @@ export async function buildSendDraftEmailResponse(
   });
 
   trackFollowUp(draft, "email");
+
+  const emailLabel =
+    draft.type === "reengagement_quote" ? "Win-back email" : "Reminder email";
 
   return {
     ok: true,
@@ -309,8 +393,8 @@ export async function buildSendDraftEmailResponse(
       recipientEmail,
       providerId: info.messageId,
       message: env.COMMUNICATIONS_TEST_EMAIL.trim()
-        ? `Reminder email sent to test inbox (${recipientEmail}).`
-        : `Reminder email sent to ${recipientEmail}.`
+        ? `${emailLabel} sent to test inbox (${recipientEmail}).`
+        : `${emailLabel} sent to ${recipientEmail}.`
     }
   };
 }
@@ -343,34 +427,73 @@ export async function buildSendVoiceInviteResponse(
 
   const token = createVoiceSessionFromDraft(stored);
   const callUrl = buildCallUrl(token);
-  const daysOverdue = getMetadataNumber(stored, "daysOverdue");
-  const invoiceNumber = getMetadataString(stored, "invoiceNumber") ?? "outstanding invoice";
-  const amountLabel = `${stored.currency} ${stored.expectedImpact.amount.toFixed(2)}`;
-
-  const subjectLine =
-    input.subjectLine?.trim() ||
-    `Let's resolve ${invoiceNumber}: speak with our agent`;
-  const draftMessage =
-    input.draftMessage?.trim() ||
-    `Invoice ${invoiceNumber} is ${daysOverdue} days overdue (${amountLabel}). Click below to speak with our collections agent at a time that suits you.`;
-
-  const outboundDraft = mergeDraftOverrides(stored, { subjectLine, draftMessage });
-  const html = buildVoiceInviteHtml({
-    contactName: stored.targetName,
-    invoiceNumber,
-    daysOverdue,
-    amountLabel,
-    callUrl,
-    message: draftMessage
+  const outboundDraft = mergeDraftOverrides(stored, {
+    subjectLine: input.subjectLine,
+    draftMessage: input.draftMessage,
   });
-  const text = buildVoiceInviteText({
-    contactName: stored.targetName,
-    invoiceNumber,
-    daysOverdue,
-    amountLabel,
-    callUrl,
-    message: draftMessage
-  });
+
+  let html: string;
+  let text: string;
+
+  if (stored.type === "reengagement_quote") {
+    const daysSinceLastActivity = getMetadataNumber(stored, "daysSinceLastActivity");
+    const historicalLTV = getMetadataNumber(stored, "historicalLTV");
+    const amountLabel = `${stored.currency} ${historicalLTV.toFixed(2)}`;
+    const subjectLine =
+      input.subjectLine?.trim() ||
+      `Let's reconnect, ${stored.targetName}`;
+    const draftMessage =
+      input.draftMessage?.trim() ||
+      `It's been ${daysSinceLastActivity} days since we last worked together. Click below to speak with our reactivation agent at a time that suits you.`;
+
+    outboundDraft.subjectLine = subjectLine;
+    outboundDraft.draftMessage = draftMessage;
+
+    html = buildReactivationVoiceInviteHtml({
+      contactName: stored.targetName,
+      daysSinceLastActivity,
+      amountLabel,
+      callUrl,
+      message: draftMessage,
+    });
+    text = buildReactivationVoiceInviteText({
+      contactName: stored.targetName,
+      daysSinceLastActivity,
+      amountLabel,
+      callUrl,
+      message: draftMessage,
+    });
+  } else {
+    const daysOverdue = getMetadataNumber(stored, "daysOverdue");
+    const invoiceNumber = getMetadataString(stored, "invoiceNumber") ?? "outstanding invoice";
+    const amountLabel = `${stored.currency} ${stored.expectedImpact.amount.toFixed(2)}`;
+    const subjectLine =
+      input.subjectLine?.trim() ||
+      `Let's resolve ${invoiceNumber}: speak with our agent`;
+    const draftMessage =
+      input.draftMessage?.trim() ||
+      `Invoice ${invoiceNumber} is ${daysOverdue} days overdue (${amountLabel}). Click below to speak with our collections agent at a time that suits you.`;
+
+    outboundDraft.subjectLine = subjectLine;
+    outboundDraft.draftMessage = draftMessage;
+
+    html = buildVoiceInviteHtml({
+      contactName: stored.targetName,
+      invoiceNumber,
+      daysOverdue,
+      amountLabel,
+      callUrl,
+      message: draftMessage,
+    });
+    text = buildVoiceInviteText({
+      contactName: stored.targetName,
+      invoiceNumber,
+      daysOverdue,
+      amountLabel,
+      callUrl,
+      message: draftMessage,
+    });
+  }
 
   const info = await sendWithSmtp(outboundDraft, recipientEmail, { html, text });
 

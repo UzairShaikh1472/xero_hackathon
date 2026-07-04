@@ -5,6 +5,7 @@ import {
   buildPayablesDraftResponse,
   buildReceivablesDraftResponse,
   buildReceivablesDraftsListResponse,
+  buildReengagementDraftsListResponse,
   buildReengagementQuoteResponse,
   buildSimulationExecuteResponse
 } from "../lib/services/action-service.js";
@@ -161,6 +162,16 @@ apiRouter.get("/agent/receivables-drafts", async (request, response, next) => {
   try {
     const fast = request.query.fast === "1" || request.query.fast === "true";
     const payload = await buildReceivablesDraftsListResponse({ fast });
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.get("/agent/reengagement-drafts", async (request, response, next) => {
+  try {
+    const fast = request.query.fast === "1" || request.query.fast === "true";
+    const payload = await buildReengagementDraftsListResponse({ fast });
     response.json(payload);
   } catch (error) {
     next(error);

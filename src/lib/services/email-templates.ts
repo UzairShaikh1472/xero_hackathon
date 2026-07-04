@@ -179,6 +179,153 @@ ${params.callUrl}
 Sent via UpFlow on behalf of your finance team.`;
 }
 
+export interface ReactivationEmailParams {
+  contactName: string;
+  organizationName: string;
+  body: string;
+  daysSinceLastActivity: number;
+  historicalLTV: number;
+  currency: string;
+  offerPercent?: number;
+  estimatedValue?: number;
+}
+
+function buildReactivationSummaryHtml(params: ReactivationEmailParams): string {
+  const ltvLabel = formatMoney(params.historicalLTV, params.currency);
+  const offerRow =
+    params.offerPercent != null &&
+    params.offerPercent > 0 &&
+    params.estimatedValue != null
+      ? `<tr>
+          <td style="padding: 8px 0; color: #555;">Returning-customer offer (${params.offerPercent}% off)</td>
+          <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #166534;">${formatMoney(params.estimatedValue, params.currency)} estimated order value</td>
+        </tr>`
+      : "";
+
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; margin: 20px 0; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb;">
+    <tr>
+      <td style="padding: 16px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #555;">Days since last order</td>
+            <td style="padding: 8px 0; text-align: right; font-weight: 600;">${params.daysSinceLastActivity} day${params.daysSinceLastActivity === 1 ? "" : "s"}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #555;">Historical LTV</td>
+            <td style="padding: 8px 0; text-align: right; font-weight: 600;">${ltvLabel}</td>
+          </tr>
+          ${offerRow}
+        </table>
+      </td>
+    </tr>
+  </table>`;
+}
+
+function buildReactivationSummaryText(params: ReactivationEmailParams): string {
+  const lines = [
+    "── Account summary ──",
+    `Last activity: ${params.daysSinceLastActivity} day${params.daysSinceLastActivity === 1 ? "" : "s"} ago`,
+    `Historical LTV: ${formatMoney(params.historicalLTV, params.currency)}`,
+  ];
+
+  if (
+    params.offerPercent != null &&
+    params.offerPercent > 0 &&
+    params.estimatedValue != null
+  ) {
+    lines.push(
+      `Offer: ${formatMoney(params.estimatedValue, params.currency)} estimated with ${params.offerPercent}% returning-customer incentive`,
+    );
+  }
+
+  lines.push("────────────────────");
+  return lines.join("\n");
+}
+
+export function buildReactivationEmailHtml(params: ReactivationEmailParams): string {
+  const body = normalizeEmailBody(params.body);
+  const bodyHtml = escapeHtml(body).replace(/\n/g, "<br />");
+
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111; line-height: 1.6; max-width: 560px; margin: 0 auto; padding: 24px;">
+  <p style="margin: 0 0 16px;">Hi ${escapeHtml(params.contactName)},</p>
+  ${buildReactivationSummaryHtml(params)}
+  ${body ? `<p style="margin: 0 0 16px;">${bodyHtml}</p>` : ""}
+  <p style="margin: 24px 0 4px;">Best regards,</p>
+  <p style="margin: 0; font-weight: 600;">${escapeHtml(params.organizationName)}</p>
+  <p style="margin-top: 32px; font-size: 13px; color: #666;">Sent via UpFlow on behalf of your finance team.</p>
+</body>
+</html>`;
+}
+
+export function buildReactivationEmailText(params: ReactivationEmailParams): string {
+  const body = normalizeEmailBody(params.body);
+
+  return `Hi ${params.contactName},
+
+${buildReactivationSummaryText(params)}
+
+${body}
+
+Best regards,
+${params.organizationName}
+
+Sent via UpFlow on behalf of your finance team.`;
+}
+
+export function buildReactivationVoiceInviteHtml(params: {
+  contactName: string;
+  daysSinceLastActivity: number;
+  amountLabel: string;
+  callUrl: string;
+  message?: string;
+}) {
+  const intro =
+    normalizeEmailBody(
+      params.message?.trim() ||
+        `It's been ${params.daysSinceLastActivity} days since we last worked together (${params.amountLabel} historical value). We'd love to hear what you're planning next.`,
+    );
+
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111; line-height: 1.6; max-width: 560px; margin: 0 auto; padding: 24px;">
+  <p>Hi ${escapeHtml(params.contactName)},</p>
+  <p>${escapeHtml(intro)}</p>
+  <p style="margin: 32px 0;">
+    <a href="${escapeHtml(params.callUrl)}" style="display: inline-block; background: #2563eb; color: #fff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">
+      Speak with reactivation agent
+    </a>
+  </p>
+  <p style="font-size: 14px; color: #666;">Or copy this link: <a href="${escapeHtml(params.callUrl)}">${escapeHtml(params.callUrl)}</a></p>
+  <p style="margin-top: 32px; font-size: 13px; color: #666;">Sent via UpFlow on behalf of your finance team.</p>
+</body>
+</html>`;
+}
+
+export function buildReactivationVoiceInviteText(params: {
+  contactName: string;
+  daysSinceLastActivity: number;
+  amountLabel: string;
+  callUrl: string;
+  message?: string;
+}) {
+  const intro =
+    normalizeEmailBody(
+      params.message?.trim() ||
+        `It's been ${params.daysSinceLastActivity} days since we last worked together (${params.amountLabel} historical value).`,
+    );
+
+  return `Hi ${params.contactName},
+
+${intro}
+
+Speak with our reactivation agent here:
+${params.callUrl}
+
+Sent via UpFlow on behalf of your finance team.`;
+}
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
