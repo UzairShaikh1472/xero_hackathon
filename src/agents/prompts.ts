@@ -8,19 +8,40 @@ export const SYSTEM_PROMPT = `You are a drafting assistant for Xero Kinetic, a c
 
 Rules (non-negotiable):
 - You ONLY write a professional draftMessage from the FACTS block.
-- Never invent amounts, contact names, invoice IDs, urgency levels, reliability scores, or cash impact.
-- Never change the recommended action — phrase the message around it.
+- Never invent amounts, contact names, invoice numbers, urgency levels, reliability scores, or cash impact.
+- Never change the recommended action. Phrase the message around it.
 - Keep draftMessage concise, polite, and ready to send (email/body tone).
+- Write body paragraphs ONLY: no greeting (Hi/Dear), no sign-off, no placeholders like [Your Name] or [Your Company].
+- Never reference UUIDs or internal invoice IDs. Use the human-readable invoice number from FACTS.
 - confidenceLevel is your confidence in draft quality (0–1), not a financial risk score.
-- Do NOT include a reason field — explanations are computed separately from scores.
+- Do NOT include a reason field. Explanations are computed separately from scores.
 - Respond with a single JSON object with exactly these keys: draftMessage (string), confidenceLevel (number 0–1).`;
 
-export function receivablesUserPrompt(risk: InvoiceRisk): string {
+export interface ReceivablesPromptContext {
+  invoiceNumber: string;
+  discountPercent?: number;
+  discountedAmount?: number;
+  organizationName?: string;
+}
+
+export function receivablesUserPrompt(
+  risk: InvoiceRisk,
+  context: ReceivablesPromptContext,
+): string {
+  const discountLine =
+    context.discountPercent != null && context.discountedAmount != null
+      ? `- Discount offer: ${context.discountPercent}% early settlement → £${context.discountedAmount.toFixed(2)} if paid within 7 days`
+      : "";
+
+  const orgLine = context.organizationName
+    ? `- Sender organization: ${context.organizationName}`
+    : "";
+
   return `Draft a receivables negotiation message.
 
-FACTS (use only these — do not invent anything else):
+FACTS (use only these; do not invent anything else):
 - Contact: ${risk.contactName}
-- Invoice ID: ${risk.invoiceId}
+- Invoice number: ${context.invoiceNumber}
 - Amount due: £${risk.amount.toFixed(2)}
 - Days overdue: ${risk.daysOverdue}
 - Payment reliability score: ${risk.paymentReliabilityScore.toFixed(0)}/100
@@ -28,14 +49,16 @@ FACTS (use only these — do not invent anything else):
 - Recommended action: ${risk.recommendedAction}
 - Expected cash impact: £${risk.expectedCashImpact.toFixed(2)}
 - Liquidity priority score: ${risk.liquidityPriorityScore.toFixed(2)}
+${discountLine}
+${orgLine}
 
-Write draftMessage offering or following the recommended action.`;
+Write draftMessage (body paragraphs only: no greeting or sign-off) offering or following the recommended action.`;
 }
 
 export function payablesUserPrompt(pressure: PayablePressure): string {
   return `Draft a payables extension / supplier negotiation message.
 
-FACTS (use only these — do not invent anything else):
+FACTS (use only these; do not invent anything else):
 - Supplier: ${pressure.contactName}
 - Invoice ID: ${pressure.invoiceId}
 - Amount due: £${pressure.amount.toFixed(2)}
@@ -50,7 +73,7 @@ Write draftMessage requesting the recommended action.`;
 export function reengagementUserPrompt(customer: LapsedCustomer): string {
   return `Draft a lapsed-customer re-engagement / win-back message.
 
-FACTS (use only these — do not invent anything else):
+FACTS (use only these; do not invent anything else):
 - Contact: ${customer.contactName}
 - Last invoice date: ${customer.lastInvoiceDate}
 - Days since last activity: ${customer.daysSinceLastActivity}

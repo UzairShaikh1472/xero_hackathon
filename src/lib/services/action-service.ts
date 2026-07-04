@@ -82,6 +82,7 @@ function toApiDraft(
     type: NegotiationDraft["type"];
     targetId: string;
     currency: string;
+    subjectLine?: string;
     metadata: NegotiationDraft["metadata"];
   }
 ): NegotiationDraft {
@@ -97,7 +98,7 @@ function toApiDraft(
       amount: Number(agentDraft.expectedCashImpact.toFixed(2)),
       currency: fields.currency
     },
-    subjectLine: agentDraft.proposedAction,
+    subjectLine: fields.subjectLine ?? agentDraft.proposedAction,
     draftMessage: agentDraft.draftMessage,
     metadata: {
       ...fields.metadata,
@@ -127,20 +128,11 @@ async function withAgentDraft(
   }
 }
 
-export async function buildReceivablesDraftResponse(
-  input: ReceivablesDraftRequest
-): Promise<ApiEnvelope<NegotiationDraft>> {
-  const snapshot = await getPhaseOneSnapshotData();
-  const invoiceId = assertString(input.invoiceId, "invoiceId");
-  const invoice = snapshot.invoices.find((item) => item.id === invoiceId);
-
-  if (!invoice) {
-    throw new HttpError(404, "Invoice not found for receivables draft");
-  }
-
-  const discountPercent = clampPercent(input.discountPercent, 2, 1, 10);
-  const currency = invoice.amountDue.currency;
-  const tone = input.tone ?? "friendly";
+function buildReceivablesRiskForInvoice(
+  snapshot: Awaited<ReturnType<typeof getPhaseOneSnapshotData>>,
+  invoice: (typeof snapshot.invoices)[number],
+  discountPercent: number
+): AgentInvoiceRisk {
   const normalized = snapshotToNormalized(snapshot);
   const { atRiskInvoices } = analyzeLiquidity(normalized);
   const scored =
@@ -160,55 +152,118 @@ export async function buildReceivablesDraftResponse(
       liquidityPriorityScore: 0
     } satisfies AgentInvoiceRisk);
 
-  const risk: AgentInvoiceRisk = {
+  return {
     ...scored,
     recommendedAction: `Offer ${discountPercent}% early settlement discount`,
     expectedCashImpact: Number(
       (invoice.amountDue.amount * (1 - discountPercent / 100)).toFixed(2)
     )
   };
+}
+
+function buildReceivablesTemplateDraft(
+  snapshot: Awaited<ReturnType<typeof getPhaseOneSnapshotData>>,
+  invoice: (typeof snapshot.invoices)[number],
+  risk: AgentInvoiceRisk,
+  discountPercent: number,
+  tone: string
+): NegotiationDraft {
+  const currency = invoice.amountDue.currency;
+  return {
+    id: `draft_receivables_${invoice.id}`,
+    type: "receivables_discount",
+    targetId: invoice.id,
+    targetName: invoice.contactName,
+    currency,
+    priority: invoice.daysOverdue >= 7 ? "high" : "medium",
+    reason: `${invoice.invoiceNumber} is overdue by ${invoice.daysOverdue} days with ${currency} ${invoice.amountDue.amount} outstanding.`,
+    expectedImpact: {
+      amount: risk.expectedCashImpact,
+      currency
+    },
+    subjectLine: `Quick settlement option for ${invoice.invoiceNumber}`,
+    draftMessage: `We noticed ${invoice.invoiceNumber} is still outstanding. If payment can be completed this week, we can offer a ${discountPercent}% early settlement discount to help close it promptly.`,
+    metadata: {
+      tone,
+      discountPercent,
+      invoiceNumber: invoice.invoiceNumber,
+      amountDue: invoice.amountDue.amount,
+      daysOverdue: invoice.daysOverdue,
+      organizationName: snapshot.sync.organizationName ?? null,
+      contactEmail: snapshot.contacts.find((item) => item.id === invoice.contactId)?.email ?? null,
+      contactPhone: snapshot.contacts.find((item) => item.id === invoice.contactId)?.phone ?? null,
+      agentGenerated: false
+    }
+  };
+}
+
+export async function buildReceivablesDraftResponse(
+  input: ReceivablesDraftRequest
+): Promise<ApiEnvelope<NegotiationDraft>> {
+  const snapshot = await getPhaseOneSnapshotData();
+  const invoiceId = assertString(input.invoiceId, "invoiceId");
+  const draftId = `draft_receivables_${invoiceId}`;
+  const cached = getStoredDraft(draftId);
+  if (cached && input.useAgent !== true) {
+    return {
+      ok: true,
+      mode: snapshot.sync.source,
+      generatedAt: new Date().toISOString(),
+      data: cached
+    };
+  }
+
+  const invoice = snapshot.invoices.find((item) => item.id === invoiceId);
+
+  if (!invoice) {
+    throw new HttpError(404, "Invoice not found for receivables draft");
+  }
+
+  const discountPercent = clampPercent(input.discountPercent, 2, 1, 10);
+  const currency = invoice.amountDue.currency;
+  const tone = input.tone ?? "friendly";
+  const risk = buildReceivablesRiskForInvoice(snapshot, invoice, discountPercent);
+
+  if (input.useAgent === false) {
+    const draft = buildReceivablesTemplateDraft(snapshot, invoice, risk, discountPercent, tone);
+    persistDraft(draft);
+    return {
+      ok: true,
+      mode: snapshot.sync.source,
+      generatedAt: new Date().toISOString(),
+      data: draft
+    };
+  }
+
+  const organizationName = snapshot.sync.organizationName ?? undefined;
 
   const draft = await withAgentDraft(
     async () => {
-      const agentDraft = await draftReceivablesNegotiation(risk);
+      const agentDraft = await draftReceivablesNegotiation(risk, {
+        invoiceNumber: invoice.invoiceNumber,
+        discountPercent,
+        discountedAmount: risk.expectedCashImpact,
+        organizationName,
+      });
       return toApiDraft(agentDraft, {
-        id: `draft_receivables_${invoice.id}`,
+        id: draftId,
         type: "receivables_discount",
         targetId: invoice.id,
         currency,
+        subjectLine: `Quick settlement option for ${invoice.invoiceNumber}`,
         metadata: {
           tone,
           discountPercent,
           invoiceNumber: invoice.invoiceNumber,
+          amountDue: invoice.amountDue.amount,
           daysOverdue: invoice.daysOverdue,
+          organizationName: organizationName ?? null,
           contactEmail: snapshot.contacts.find((item) => item.id === invoice.contactId)?.email ?? null,
           contactPhone: snapshot.contacts.find((item) => item.id === invoice.contactId)?.phone ?? null
         }
       });
     },
-    () => ({
-      id: `draft_receivables_${invoice.id}`,
-      type: "receivables_discount",
-      targetId: invoice.id,
-      targetName: invoice.contactName,
-      currency,
-      priority: invoice.daysOverdue >= 7 ? "high" : "medium",
-      reason: `${invoice.invoiceNumber} is overdue by ${invoice.daysOverdue} days with ${currency} ${invoice.amountDue.amount} outstanding.`,
-      expectedImpact: {
-        amount: risk.expectedCashImpact,
-        currency
-      },
-      subjectLine: `Quick settlement option for ${invoice.invoiceNumber}`,
-      draftMessage: `Hi ${invoice.contactName}, we noticed ${invoice.invoiceNumber} is still outstanding. If payment can be completed this week, we can offer a ${discountPercent}% early settlement discount to help close it promptly.`,
-      metadata: {
-        tone,
-        discountPercent,
-        invoiceNumber: invoice.invoiceNumber,
-        daysOverdue: invoice.daysOverdue,
-        contactEmail: snapshot.contacts.find((item) => item.id === invoice.contactId)?.email ?? null,
-        contactPhone: snapshot.contacts.find((item) => item.id === invoice.contactId)?.phone ?? null
-      }
-    })
+    () => buildReceivablesTemplateDraft(snapshot, invoice, risk, discountPercent, tone)
   );
 
   persistDraft(draft);
@@ -218,6 +273,48 @@ export async function buildReceivablesDraftResponse(
     mode: snapshot.sync.source,
     generatedAt: new Date().toISOString(),
     data: draft
+  };
+}
+
+export async function buildReceivablesDraftsListResponse(options?: {
+  fast?: boolean;
+}): Promise<ApiEnvelope<{ drafts: NegotiationDraft[] }>> {
+  const snapshot = await getPhaseOneSnapshotData();
+  const normalized = snapshotToNormalized(snapshot);
+  const { atRiskInvoices } = analyzeLiquidity(normalized);
+  const overdue = atRiskInvoices.filter((risk) => risk.daysOverdue > 0);
+
+  const drafts: NegotiationDraft[] = [];
+
+  for (const risk of overdue) {
+    const invoice = snapshot.invoices.find((item) => item.id === risk.invoiceId);
+    if (!invoice) {
+      continue;
+    }
+
+    const draftId = `draft_receivables_${invoice.id}`;
+    const cached = getStoredDraft(draftId);
+    if (cached) {
+      drafts.push(cached);
+      continue;
+    }
+
+    if (options?.fast) {
+      const template = buildReceivablesTemplateDraft(snapshot, invoice, risk, 2, "friendly");
+      persistDraft(template);
+      drafts.push(template);
+      continue;
+    }
+
+    const envelope = await buildReceivablesDraftResponse({ invoiceId: invoice.id });
+    drafts.push(envelope.data);
+  }
+
+  return {
+    ok: true,
+    mode: snapshot.sync.source,
+    generatedAt: new Date().toISOString(),
+    data: { drafts }
   };
 }
 

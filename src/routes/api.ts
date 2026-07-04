@@ -4,19 +4,25 @@ import { env } from "../lib/config/env.js";
 import {
   buildPayablesDraftResponse,
   buildReceivablesDraftResponse,
+  buildReceivablesDraftsListResponse,
   buildReengagementQuoteResponse,
   buildSimulationExecuteResponse
 } from "../lib/services/action-service.js";
 import {
+  buildCreateVoiceSessionResponse,
   buildPlaceDraftCallResponse,
-  buildSendDraftEmailResponse
+  buildSendDraftEmailResponse,
+  buildSendVoiceInviteResponse
 } from "../lib/services/communications-service.js";
 import { buildExecutionHistoryResponse } from "../lib/services/execution-history-service.js";
+import { buildFollowUpsResponse } from "../lib/services/resolved-actions-service.js";
 import { buildHealthResponse } from "../lib/services/health-service.js";
 import { buildInvoiceRiskResponse } from "../lib/services/invoice-risk-service.js";
 import { buildLiquidityResponse } from "../lib/services/liquidity-service.js";
 import { buildOpenPayablesResponse } from "../lib/services/payables-service.js";
-import { clearSnapshotCache, getPhaseOneSnapshot, handleOAuthCallback } from "../lib/services/phase-one-sync-service.js";
+import { clearSnapshotCache, getPhaseOneSnapshot, getPhaseOneSnapshotData, handleOAuthCallback } from "../lib/services/phase-one-sync-service.js";
+import { buildVoiceChatResponse } from "../lib/services/voice-chat-service.js";
+import { buildVoiceSessionContext } from "../lib/services/voice-session-service.js";
 import { buildRevenueOpportunitiesResponse } from "../lib/services/revenue-opportunities-service.js";
 import { buildSummaryResponse } from "../lib/services/summary-service.js";
 import { getBackendMode } from "../lib/config/runtime-mode.js";
@@ -87,6 +93,15 @@ apiRouter.get("/executions/history", async (_request, response, next) => {
   }
 });
 
+apiRouter.get("/actions/follow-ups", async (_request, response, next) => {
+  try {
+    const payload = await buildFollowUpsResponse();
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
 apiRouter.get("/xero/auth-url", (_request, response) => {
   if (!isXeroConfigured()) {
     return response.status(503).json({
@@ -141,6 +156,16 @@ apiRouter.get("/sync/phase-one", async (_request, response, next) => {
   }
 });
 
+apiRouter.get("/agent/receivables-drafts", async (request, response, next) => {
+  try {
+    const fast = request.query.fast === "1" || request.query.fast === "true";
+    const payload = await buildReceivablesDraftsListResponse({ fast });
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
 apiRouter.post("/agent/receivables-draft", async (request, response, next) => {
   try {
     const payload = await buildReceivablesDraftResponse(request.body);
@@ -186,9 +211,53 @@ apiRouter.post("/communications/send-email", async (request, response, next) => 
   }
 });
 
+apiRouter.post("/communications/send-voice-invite", async (request, response, next) => {
+  try {
+    const payload = await buildSendVoiceInviteResponse(request.body);
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
 apiRouter.post("/communications/place-call", async (request, response, next) => {
   try {
     const payload = await buildPlaceDraftCallResponse(request.body);
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.post("/voice/sessions", async (request, response, next) => {
+  try {
+    const draftId = String(request.body?.draftId ?? "").trim();
+    const invoiceId = String(request.body?.invoiceId ?? "").trim() || undefined;
+    const payload = await buildCreateVoiceSessionResponse(draftId, invoiceId);
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.get("/voice/sessions/:token", async (request, response, next) => {
+  try {
+    const token = String(request.params.token ?? "").trim();
+    const snapshot = await getPhaseOneSnapshotData();
+    response.json({
+      ok: true,
+      mode: snapshot.sync.source,
+      generatedAt: new Date().toISOString(),
+      data: buildVoiceSessionContext(token)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.post("/voice/chat", async (request, response, next) => {
+  try {
+    const payload = await buildVoiceChatResponse(request.body);
     response.json(payload);
   } catch (error) {
     next(error);

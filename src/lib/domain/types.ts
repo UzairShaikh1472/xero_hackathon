@@ -51,6 +51,7 @@ export type HealthStatus = {
   lastSyncAt: string | null;
   emailConfigured: boolean;
   voiceConfigured: boolean;
+  browserVoiceConfigured: boolean;
 };
 
 export type SyncStatus = {
@@ -174,6 +175,8 @@ export type ReceivablesDraftRequest = {
   invoiceId: string;
   tone?: DraftTone;
   discountPercent?: number;
+  /** When false, skip LLM and return template draft. When true, force LLM even if cached. */
+  useAgent?: boolean;
 };
 
 export type PayablesDraftRequest = {
@@ -206,6 +209,16 @@ export type NegotiationDraft = {
 
 export type SendDraftEmailRequest = {
   draftId: string;
+  invoiceId?: string;
+  subjectLine?: string;
+  draftMessage?: string;
+};
+
+export type SendVoiceInviteRequest = {
+  draftId: string;
+  invoiceId?: string;
+  subjectLine?: string;
+  draftMessage?: string;
 };
 
 export type PlaceDraftCallRequest = {
@@ -214,7 +227,7 @@ export type PlaceDraftCallRequest = {
 
 export type CommunicationActionResult = {
   draftId: string;
-  channel: "email" | "call";
+  channel: "email" | "call" | "voice_invite";
   status: "sent" | "queued";
   recipientName: string;
   recipientEmail?: string;
@@ -222,6 +235,57 @@ export type CommunicationActionResult = {
   providerId?: string;
   message: string;
   scriptPreview?: string;
+  callUrl?: string;
+  callToken?: string;
+};
+
+export type VoiceSessionContext = {
+  token: string;
+  draftId: string;
+  contactName: string;
+  invoiceNumber: string;
+  amountDue: number;
+  currency: string;
+  daysOverdue: number;
+  discountPercent?: number;
+  expiresAt: string;
+  vapiPublicKey?: string;
+  vapiAssistantId?: string;
+  systemPrompt: string;
+};
+
+export type CreateVoiceSessionRequest = {
+  draftId: string;
+};
+
+export type VoiceChatRequest = {
+  token: string;
+  message: string;
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
+};
+
+export type VoiceChatResponse = {
+  reply: string;
+};
+
+export type VoiceCallTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type VoiceCallCompleteRequest = {
+  token: string;
+  transcript: VoiceCallTurn[];
+};
+
+export type VoiceCallCompleteResponse = {
+  contactName: string;
+  invoiceNumber: string;
+  summary: string;
+  transcript: VoiceCallTurn[];
+  emailSent: boolean;
+  recipientEmail?: string;
+  message: string;
 };
 
 export type SimulationExecuteRequest = {
@@ -253,4 +317,35 @@ export type ExecutionHistoryEntry = ExecutionResult & {
 export type ExecutionHistorySnapshot = {
   totalExecutions: number;
   items: ExecutionHistoryEntry[];
+};
+
+export type FollowUpRecord = {
+  id: string;
+  draftId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  contactName: string;
+  channel: "email" | "call";
+  sentAt: string;
+  expectedCashImpact: number;
+  currency: string;
+};
+
+export type ResolvedAction = {
+  id: string;
+  draftId: string;
+  invoiceId: string;
+  contactName: string;
+  invoiceNumber: string;
+  channel: "email" | "call";
+  sentAt: string;
+  resolvedAt: string;
+  amountCollected: number;
+  currency: string;
+  source: "xero";
+};
+
+export type FollowUpsSnapshot = {
+  open: FollowUpRecord[];
+  resolved: ResolvedAction[];
 };

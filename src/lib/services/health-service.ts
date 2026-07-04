@@ -1,5 +1,9 @@
 import type { ApiEnvelope, HealthStatus } from "../domain/types.js";
-import { isEmailConfigured, isVoiceConfigured } from "../config/communications-config.js";
+import {
+  isBrowserVoiceConfigured,
+  isEmailConfigured,
+  isVoiceConfigured
+} from "../config/communications-config.js";
 import { env } from "../config/env.js";
 import { getActualBackendMode, isXeroConfigured } from "../config/xero-config.js";
 import { getLastSyncAt, getTenant, getTokenSet } from "../xero/session-store.js";
@@ -21,7 +25,8 @@ export async function buildHealthResponse(): Promise<ApiEnvelope<HealthStatus>> 
       fallbackEnabled: env.USE_XERO_FALLBACK,
       lastSyncAt: getLastSyncAt(),
       emailConfigured: isEmailConfigured(),
-      voiceConfigured: isVoiceConfigured()
+      voiceConfigured: isVoiceConfigured(),
+      browserVoiceConfigured: isBrowserVoiceConfigured()
     }
   };
 }

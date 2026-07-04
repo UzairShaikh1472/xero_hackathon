@@ -1,26 +1,57 @@
 import nodemailer from "nodemailer";
 
-import { isEmailConfigured, isVoiceConfigured } from "../config/communications-config.js";
+import {
+  isBrowserVoiceConfigured,
+  isEmailConfigured,
+  isVoiceConfigured
+} from "../config/communications-config.js";
 import { env } from "../config/env.js";
 import type {
   ApiEnvelope,
   CommunicationActionResult,
   NegotiationDraft,
   PlaceDraftCallRequest,
-  SendDraftEmailRequest
+  SendDraftEmailRequest,
+  SendVoiceInviteRequest
 } from "../domain/types.js";
 import { HttpError } from "../utils/http-error.js";
 import { logger } from "../utils/logger.js";
 import { getStoredDraft } from "../utils/idempotency.js";
+import { recordFollowUp } from "../utils/follow-up-store.js";
+import { buildReceivablesDraftResponse } from "./action-service.js";
 import { getPhaseOneSnapshotData } from "./phase-one-sync-service.js";
+import {
+  buildPaymentReminderHtml,
+  buildPaymentReminderText,
+  buildVoiceInviteHtml,
+  buildVoiceInviteText
+} from "./email-templates.js";
+import {
+  buildCallUrl,
+  createVoiceSessionFromDraft
+} from "./voice-session-service.js";
 
-function getDraftOrThrow(draftId: string) {
-  const draft = getStoredDraft(draftId);
-  if (!draft) {
-    throw new HttpError(404, "Draft not found. Refresh the dashboard and generate the draft again.");
+async function getDraftOrThrow(draftId: string, invoiceId?: string) {
+  const existing = getStoredDraft(draftId);
+  if (existing) {
+    return existing;
   }
 
-  return draft;
+  const resolvedInvoiceId =
+    invoiceId?.trim() ||
+    draftId.match(/^draft_receivables_(.+)$/)?.[1] ||
+    "";
+
+  if (resolvedInvoiceId) {
+    logger.info("communications.draft.regenerating", { draftId, invoiceId: resolvedInvoiceId });
+    const envelope = await buildReceivablesDraftResponse({
+      invoiceId: resolvedInvoiceId,
+      useAgent: false
+    });
+    return envelope.data;
+  }
+
+  throw new HttpError(404, "Draft not found. Refresh the dashboard and generate the draft again.");
 }
 
 function getMetadataNumber(draft: NegotiationDraft, field: string) {
@@ -47,12 +78,54 @@ function ensureEmailEligibility(draft: NegotiationDraft) {
   }
 }
 
+function ensureVoiceInviteEligibility(draft: NegotiationDraft) {
+  ensureReceivablesDraft(draft);
+  const daysOverdue = getMetadataNumber(draft, "daysOverdue");
+  if (daysOverdue < 14) {
+    throw new HttpError(
+      400,
+      "Voice invites are only available for invoices overdue by 14 days or more."
+    );
+  }
+}
+
 function ensureCallEligibility(draft: NegotiationDraft) {
   ensureReceivablesDraft(draft);
   const daysOverdue = getMetadataNumber(draft, "daysOverdue");
   if (daysOverdue < 15) {
     throw new HttpError(400, "Automated calls are only available for invoices overdue by 15 days or more.");
   }
+}
+
+function mergeDraftOverrides(
+  draft: NegotiationDraft,
+  overrides: { subjectLine?: string; draftMessage?: string }
+): NegotiationDraft {
+  return {
+    ...draft,
+    subjectLine: overrides.subjectLine?.trim() || draft.subjectLine,
+    draftMessage: overrides.draftMessage?.trim() || draft.draftMessage
+  };
+}
+
+function resolveDraftRecipient(draft: NegotiationDraft): string {
+  const testEmail = env.COMMUNICATIONS_TEST_EMAIL.trim();
+  if (testEmail) {
+    const contactEmail = getMetadataString(draft, "contactEmail");
+    if (contactEmail) {
+      logger.info("communications.email.test_override", {
+        originalRecipient: contactEmail,
+        testRecipient: testEmail
+      });
+    }
+    return testEmail;
+  }
+
+  const contactEmail = getMetadataString(draft, "contactEmail");
+  if (!contactEmail) {
+    throw new HttpError(400, "This client does not have an email address in Xero.");
+  }
+  return contactEmail;
 }
 
 function buildCallScript(draft: NegotiationDraft) {
@@ -69,7 +142,11 @@ function buildCallScript(draft: NegotiationDraft) {
   ].join(" ");
 }
 
-async function sendWithSmtp(draft: NegotiationDraft, email: string) {
+async function sendWithSmtp(
+  draft: NegotiationDraft,
+  email: string,
+  options: { html: string; text: string }
+) {
   const transporter = nodemailer.createTransport({
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
@@ -84,9 +161,60 @@ async function sendWithSmtp(draft: NegotiationDraft, email: string) {
     from: env.SMTP_FROM,
     to: email,
     subject: draft.subjectLine,
-    text: draft.draftMessage,
-    html: `<p>${draft.draftMessage.replace(/\n/g, "<br />")}</p>`
+    text: options.text,
+    html: options.html
   });
+}
+
+function resolveOrganizationName(
+  draft: NegotiationDraft,
+  snapshot: Awaited<ReturnType<typeof getPhaseOneSnapshotData>>
+): string {
+  return (
+    getMetadataString(draft, "organizationName") ??
+    snapshot.sync.organizationName ??
+    "Your finance team"
+  );
+}
+
+function resolveAmountDue(draft: NegotiationDraft): number {
+  const stored = getMetadataNumber(draft, "amountDue");
+  if (stored > 0) {
+    return stored;
+  }
+
+  const discountPercent = getMetadataNumber(draft, "discountPercent");
+  if (discountPercent > 0 && discountPercent < 100) {
+    return Number(
+      (draft.expectedImpact.amount / (1 - discountPercent / 100)).toFixed(2)
+    );
+  }
+
+  return draft.expectedImpact.amount;
+}
+
+function buildPaymentReminderPayload(
+  draft: NegotiationDraft,
+  snapshot: Awaited<ReturnType<typeof getPhaseOneSnapshotData>>
+) {
+  const discountPercent = getMetadataNumber(draft, "discountPercent");
+  const params = {
+    contactName: draft.targetName,
+    organizationName: resolveOrganizationName(draft, snapshot),
+    body: draft.draftMessage,
+    invoiceNumber: getMetadataString(draft, "invoiceNumber") ?? "outstanding invoice",
+    amountDue: resolveAmountDue(draft),
+    currency: draft.currency,
+    daysOverdue: getMetadataNumber(draft, "daysOverdue"),
+    discountPercent: discountPercent > 0 ? discountPercent : undefined,
+    discountedAmount:
+      discountPercent > 0 ? draft.expectedImpact.amount : undefined,
+  };
+
+  return {
+    html: buildPaymentReminderHtml(params),
+    text: buildPaymentReminderText(params),
+  };
 }
 
 async function placeTwilioCall(to: string, script: string) {
@@ -127,6 +255,18 @@ function escapeXml(value: string) {
     .replaceAll("'", "&apos;");
 }
 
+function trackFollowUp(draft: NegotiationDraft, channel: "email" | "call") {
+  recordFollowUp({
+    draftId: draft.id,
+    invoiceId: draft.targetId,
+    invoiceNumber: getMetadataString(draft, "invoiceNumber") ?? draft.targetId,
+    contactName: draft.targetName,
+    channel,
+    expectedCashImpact: draft.expectedImpact.amount,
+    currency: draft.currency,
+  });
+}
+
 export async function buildSendDraftEmailResponse(
   input: SendDraftEmailRequest
 ): Promise<ApiEnvelope<CommunicationActionResult>> {
@@ -136,24 +276,26 @@ export async function buildSendDraftEmailResponse(
     throw new HttpError(400, "Missing draftId");
   }
 
-  const draft = getDraftOrThrow(draftId);
+  const draft = mergeDraftOverrides(await getDraftOrThrow(draftId, input.invoiceId), input);
   ensureEmailEligibility(draft);
 
   if (!isEmailConfigured()) {
     throw new HttpError(503, "SMTP email is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM.");
   }
 
-  const recipientEmail = getMetadataString(draft, "contactEmail");
-  if (!recipientEmail) {
-    throw new HttpError(400, "This client does not have an email address in Xero.");
-  }
+  const contactEmail = getMetadataString(draft, "contactEmail");
+  const recipientEmail = resolveDraftRecipient(draft);
+  const { html, text } = buildPaymentReminderPayload(draft, snapshot);
 
-  const info = await sendWithSmtp(draft, recipientEmail);
+  const info = await sendWithSmtp(draft, recipientEmail, { html, text });
   logger.info("communications.email.sent", {
     draftId,
+    contactEmail,
     recipientEmail,
     messageId: info.messageId
   });
+
+  trackFollowUp(draft, "email");
 
   return {
     ok: true,
@@ -166,7 +308,98 @@ export async function buildSendDraftEmailResponse(
       recipientName: draft.targetName,
       recipientEmail,
       providerId: info.messageId,
-      message: `Reminder email sent to ${recipientEmail}.`
+      message: env.COMMUNICATIONS_TEST_EMAIL.trim()
+        ? `Reminder email sent to test inbox (${recipientEmail}).`
+        : `Reminder email sent to ${recipientEmail}.`
+    }
+  };
+}
+
+export async function buildSendVoiceInviteResponse(
+  input: SendVoiceInviteRequest
+): Promise<ApiEnvelope<CommunicationActionResult>> {
+  const snapshot = await getPhaseOneSnapshotData();
+  const draftId = String(input.draftId ?? "").trim();
+  if (!draftId) {
+    throw new HttpError(400, "Missing draftId");
+  }
+
+  const stored = await getDraftOrThrow(draftId, input.invoiceId);
+  ensureVoiceInviteEligibility(stored);
+
+  if (!isEmailConfigured()) {
+    throw new HttpError(503, "SMTP email is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM.");
+  }
+
+  if (!isBrowserVoiceConfigured()) {
+    throw new HttpError(
+      503,
+      "Browser voice is not configured. Set GEMINI_API_KEY or VAPI_PUBLIC_KEY + VAPI_ASSISTANT_ID."
+    );
+  }
+
+  const contactEmail = getMetadataString(stored, "contactEmail");
+  const recipientEmail = resolveDraftRecipient(stored);
+
+  const token = createVoiceSessionFromDraft(stored);
+  const callUrl = buildCallUrl(token);
+  const daysOverdue = getMetadataNumber(stored, "daysOverdue");
+  const invoiceNumber = getMetadataString(stored, "invoiceNumber") ?? "outstanding invoice";
+  const amountLabel = `${stored.currency} ${stored.expectedImpact.amount.toFixed(2)}`;
+
+  const subjectLine =
+    input.subjectLine?.trim() ||
+    `Let's resolve ${invoiceNumber}: speak with our agent`;
+  const draftMessage =
+    input.draftMessage?.trim() ||
+    `Invoice ${invoiceNumber} is ${daysOverdue} days overdue (${amountLabel}). Click below to speak with our collections agent at a time that suits you.`;
+
+  const outboundDraft = mergeDraftOverrides(stored, { subjectLine, draftMessage });
+  const html = buildVoiceInviteHtml({
+    contactName: stored.targetName,
+    invoiceNumber,
+    daysOverdue,
+    amountLabel,
+    callUrl,
+    message: draftMessage
+  });
+  const text = buildVoiceInviteText({
+    contactName: stored.targetName,
+    invoiceNumber,
+    daysOverdue,
+    amountLabel,
+    callUrl,
+    message: draftMessage
+  });
+
+  const info = await sendWithSmtp(outboundDraft, recipientEmail, { html, text });
+
+  logger.info("communications.voice_invite.sent", {
+    draftId,
+    contactEmail,
+    recipientEmail,
+    callUrl,
+    messageId: info.messageId
+  });
+
+  trackFollowUp(stored, "email");
+
+  return {
+    ok: true,
+    mode: snapshot.sync.source,
+    generatedAt: new Date().toISOString(),
+    data: {
+      draftId,
+      channel: "voice_invite",
+      status: "sent",
+      recipientName: stored.targetName,
+      recipientEmail,
+      providerId: info.messageId,
+      callUrl,
+      callToken: token,
+      message: env.COMMUNICATIONS_TEST_EMAIL.trim()
+        ? `Voice invite sent to test inbox (${recipientEmail}).`
+        : `Voice invite sent to ${recipientEmail}.`
     }
   };
 }
@@ -180,7 +413,7 @@ export async function buildPlaceDraftCallResponse(
     throw new HttpError(400, "Missing draftId");
   }
 
-  const draft = getDraftOrThrow(draftId);
+  const draft = await getDraftOrThrow(draftId);
   ensureCallEligibility(draft);
 
   if (!isVoiceConfigured()) {
@@ -201,6 +434,8 @@ export async function buildPlaceDraftCallResponse(
     callSid: result.sid ?? null
   });
 
+  trackFollowUp(draft, "call");
+
   return {
     ok: true,
     mode: snapshot.sync.source,
@@ -214,6 +449,38 @@ export async function buildPlaceDraftCallResponse(
       providerId: result.sid,
       message: `Reminder call queued to ${recipientPhone}.`,
       scriptPreview: script
+    }
+  };
+}
+
+export async function buildCreateVoiceSessionResponse(draftId: string, invoiceId?: string) {
+  const snapshot = await getPhaseOneSnapshotData();
+  const id = String(draftId ?? "").trim();
+  if (!id) {
+    throw new HttpError(400, "Missing draftId");
+  }
+
+  const draft = await getDraftOrThrow(id, invoiceId);
+  ensureVoiceInviteEligibility(draft);
+
+  if (!isBrowserVoiceConfigured()) {
+    throw new HttpError(
+      503,
+      "Browser voice is not configured. Set GEMINI_API_KEY or VAPI_PUBLIC_KEY + VAPI_ASSISTANT_ID."
+    );
+  }
+
+  const token = createVoiceSessionFromDraft(draft);
+  const callUrl = buildCallUrl(token);
+
+  return {
+    ok: true,
+    mode: snapshot.sync.source,
+    generatedAt: new Date().toISOString(),
+    data: {
+      draftId: id,
+      callToken: token,
+      callUrl
     }
   };
 }

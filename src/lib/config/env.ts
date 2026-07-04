@@ -27,7 +27,12 @@ const envSchema = z.object({
   SMTP_FROM: z.string().default(""),
   TWILIO_ACCOUNT_SID: z.string().default(""),
   TWILIO_AUTH_TOKEN: z.string().default(""),
-  TWILIO_FROM_NUMBER: z.string().default("")
+  TWILIO_FROM_NUMBER: z.string().default(""),
+  COMMUNICATIONS_TEST_EMAIL: z.string().default(""),
+  COMMUNICATIONS_TEST_PHONE: z.string().default(""),
+  CALL_REPORT_EMAIL: z.string().default(""),
+  VAPI_PUBLIC_KEY: z.string().default(""),
+  VAPI_ASSISTANT_ID: z.string().default("")
 });
 
 export const env = envSchema.parse(process.env);

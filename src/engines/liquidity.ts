@@ -126,7 +126,7 @@ function recommendedReceivableAction(
   notYetDue: boolean,
 ): string {
   if (notYetDue) {
-    return "Monitor — invoice not yet due";
+    return "Monitor: invoice not yet due";
   }
   // Due today (daysOverdue === 0) is payable now — not "not yet due".
   if (daysOverdue === 0) {
