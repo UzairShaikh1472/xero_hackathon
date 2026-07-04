@@ -12,6 +12,7 @@ import type {
 } from "./types";
 import { seedData } from "./seed";
 import { seedFollowUps } from "./seed-follow-ups";
+import { REACTIVATION_VOICE_THRESHOLD_DAYS } from "./reactivation";
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
@@ -124,15 +125,17 @@ export type VoiceSessionData = {
 
 async function fetchEnvelope<T>(path: string): Promise<ApiEnvelope<T>> {
   const res = await fetch(`${API_BASE}${path}`);
+  const body = (await res.json()) as ApiEnvelope<T> & {
+    data?: { message?: string };
+  };
   if (!res.ok) {
     if (res.status === 429) {
       throw new Error("Xero rate limit reached. Wait a minute and click Retry");
     }
-    throw new Error(`Failed to fetch ${path}: ${res.status} ${res.statusText}`);
+    throw new Error(
+      body.data?.message ?? `Failed to fetch ${path}: ${res.status} ${res.statusText}`,
+    );
   }
-  const body = (await res.json()) as ApiEnvelope<T> & {
-    data?: { message?: string };
-  };
   if (!body.ok) {
     const message = body.data?.message ?? `Backend returned ok:false for ${path}`;
     throw new Error(message);
@@ -156,8 +159,19 @@ async function postJson<T>(path: string, payload: unknown): Promise<ApiEnvelope<
 }
 
 function daysFromReason(reason: string): number {
-  const match = reason.match(/(\d+)\s+days?/i);
-  return match ? Number(match[1]) : 0;
+  const inactive = reason.match(/(\d+)\s+days?\s+inactive/i);
+  if (inactive) return Number(inactive[1]);
+  const silent = reason.match(/(\d+)\s+days?\s+silent/i);
+  if (silent) return Number(silent[1]);
+  const generic = reason.match(/(\d+)\s+days?/i);
+  return generic ? Number(generic[1]) : 0;
+}
+
+function reengagementUrgency(daysSilent: number): Urgency {
+  if (daysSilent >= 180) return "critical";
+  if (daysSilent >= REACTIVATION_VOICE_THRESHOLD_DAYS) return "high";
+  if (daysSilent >= 90) return "medium";
+  return "low";
 }
 
 function avgInvoiceFromReason(reason: string): number {
@@ -173,10 +187,19 @@ function priorityToUrgency(priority: string, daysOverdue: number): Urgency {
 }
 
 export function mapBackendDraft(draft: BackendNegotiationDraft): NegotiationDraft {
+  const isReengagement = draft.type === "reengagement_quote";
   const daysOverdue =
     typeof draft.metadata.daysOverdue === "number"
       ? draft.metadata.daysOverdue
-      : daysFromReason(draft.reason);
+      : isReengagement
+        ? undefined
+        : daysFromReason(draft.reason);
+  const daysSilent =
+    typeof draft.metadata.daysSinceLastActivity === "number"
+      ? draft.metadata.daysSinceLastActivity
+      : isReengagement
+        ? daysFromReason(draft.reason)
+        : undefined;
 
   const agent =
     draft.type === "receivables_discount"
@@ -184,6 +207,10 @@ export function mapBackendDraft(draft: BackendNegotiationDraft): NegotiationDraf
       : draft.type === "payables_extension"
         ? "payables"
         : "reengagement";
+
+  const urgency = isReengagement
+    ? reengagementUrgency(daysSilent ?? 0)
+    : priorityToUrgency(draft.priority, daysOverdue ?? 0);
 
   return {
     id: draft.id,
@@ -202,14 +229,17 @@ export function mapBackendDraft(draft: BackendNegotiationDraft): NegotiationDraf
         ? draft.metadata.contactPhone
         : undefined,
     daysOverdue,
-    urgency: priorityToUrgency(draft.priority, daysOverdue),
+    daysSilent,
+    urgency,
     reason: draft.reason,
     proposedAction:
       typeof draft.metadata.recommendedAction === "string"
         ? draft.metadata.recommendedAction
         : draft.reason,
     expectedCashImpact: draft.expectedImpact.amount,
-    hoursToImpact: Math.max(24, Math.round(daysOverdue * 12)),
+    hoursToImpact: isReengagement
+      ? Math.max(24, Math.round((daysSilent ?? 90) * 2))
+      : Math.max(24, Math.round((daysOverdue ?? 0) * 12)),
     confidence: 0.85,
     subject: draft.subjectLine,
     body: draft.draftMessage,
@@ -486,13 +516,20 @@ export async function fetchControlRoom(): Promise<ControlRoomData> {
 
 export async function fetchReceivablesDraftsBatch(): Promise<NegotiationDraft[]> {
   try {
-    const envelope = await fetchEnvelope<{ drafts: BackendNegotiationDraft[] }>(
-      "/api/agent/receivables-drafts?fast=1",
-    );
-    if (envelope.mode === "fallback") {
+    const [receivables, reengagement] = await Promise.all([
+      fetchEnvelope<{ drafts: BackendNegotiationDraft[] }>(
+        "/api/agent/receivables-drafts?fast=1",
+      ),
+      fetchEnvelope<{ drafts: BackendNegotiationDraft[] }>(
+        "/api/agent/reengagement-drafts?fast=1",
+      ),
+    ]);
+
+    if (receivables.mode === "fallback") {
       return seedData.drafts;
     }
-    return envelope.data.drafts.map(mapBackendDraft);
+
+    return [...receivables.data.drafts, ...reengagement.data.drafts].map(mapBackendDraft);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load drafts";
     if (message.includes("Failed to fetch") || message.includes("ECONNREFUSED")) {

@@ -90,6 +90,8 @@ export interface NegotiationDraft {
   contactEmail?: string;
   contactPhone?: string;
   daysOverdue?: number;
+  /** Lapsed-customer days since last order — drives email vs voice-agent outreach. */
+  daysSilent?: number;
   urgency: Urgency;
   reason: string;
   proposedAction: string;
