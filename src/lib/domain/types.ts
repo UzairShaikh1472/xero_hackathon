@@ -79,17 +79,44 @@ export type CompanySnapshot = {
   suggestedActionsCount: number;
 };
 
-export type LiquiditySnapshot = {
-  currency: string;
-  currentCash: Money | null;
-  receivablesDue30d: Money;
-  payablesDue30d: Money;
-  receivablesOverdue: Money;
-  projectedGap30d: Money;
+export type LiquidityDailyPoint = {
+  day: number;
+  inflow: number;
+  outflow: number;
+  balance: number;
+};
+
+export type LiquidityEngineSnapshot = {
+  cash: number;
+  totalReceivables: number;
+  totalPayables: number;
+  workingCapital: number;
   dso: number;
   dpo: number;
   ccc: number;
-  status: "healthy" | "watch" | "critical";
+  projectedGap30Days: number;
+};
+
+export type LiquidityAtRiskInvoice = {
+  contactId: string;
+  contactName: string;
+  invoiceId: string;
+  amount: number;
+  daysOverdue: number;
+  paymentReliabilityScore: number;
+  urgency: "critical" | "high" | "medium" | "low";
+  recommendedAction: string;
+  expectedCashImpact: number;
+  liquidityPriorityScore: number;
+};
+
+export type LiquiditySnapshot = {
+  currency: string;
+  snapshot: LiquidityEngineSnapshot;
+  atRiskInvoices: LiquidityAtRiskInvoice[];
+  daily: LiquidityDailyPoint[];
+  projectedInflow: number;
+  projectedOutflow: number;
 };
 
 export type RevenueOpportunity = {
