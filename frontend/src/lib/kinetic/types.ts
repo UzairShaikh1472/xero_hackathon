@@ -11,6 +11,9 @@ export interface CompanySnapshot {
   currency: Currency;
   currentCash: number;
   overdueReceivables: number;
+  /** Sum of expectedRecovery across overdue invoices — see engines/recovery.ts. */
+  recoverableCash: number;
+  /** Lapsed-customer reactivation value only — repeat-buyer upsell isn't included. */
   revenueOpportunityTotal: number;
 }
 
@@ -33,6 +36,10 @@ export interface InvoiceRisk {
   dueDate: string;
   riskScore: number; // 0-100
   reason: string;
+  /** 0-1, probability-weighted and time-discounted recovery estimate. */
+  recoveryProbability: number;
+  expectedDaysToCollect: number;
+  expectedRecovery: number;
 }
 
 export interface SupplierOpportunity {

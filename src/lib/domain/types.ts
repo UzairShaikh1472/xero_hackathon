@@ -150,12 +150,18 @@ export type InvoiceRisk = {
   riskScore: number;
   reason: string;
   recommendedAction: string;
+  /** 0–1, probability-weighted and time-discounted. See engines/recovery.ts. */
+  recoveryProbability: number;
+  expectedDaysToCollect: number;
+  expectedRecovery: Money;
 };
 
 export type InvoiceRiskSnapshot = {
   organizationName: string;
   currency: string;
   totalAtRisk: number;
+  /** Sum of expectedRecovery across invoices that are actually overdue (daysOverdue > 0). */
+  totalRecoverableCash: Money;
   items: InvoiceRisk[];
 };
 

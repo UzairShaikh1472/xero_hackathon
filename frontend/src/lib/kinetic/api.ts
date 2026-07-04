@@ -7,6 +7,7 @@ import type {
   NegotiationDraft,
   RepeatBuyer,
 } from "./types";
+import { seedData } from "./seed";
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
@@ -56,12 +57,16 @@ type AtRiskItem = {
   riskScore: number;
   reason: string;
   recommendedAction: string;
+  recoveryProbability: number;
+  expectedDaysToCollect: number;
+  expectedRecovery: Money;
 };
 
 type AtRiskData = {
   organizationName: string;
   currency: string;
   totalAtRisk: number;
+  totalRecoverableCash: Money;
   items: AtRiskItem[];
 };
 
@@ -108,7 +113,7 @@ function daysFromReason(reason: string): number {
 }
 
 function avgInvoiceFromReason(reason: string): number {
-  const match = reason.match(/average invoice value of\s+[A-Z]{3}\s+([\d.]+)/i);
+  const match = reason.match(/average invoice value of\s+[A-Z]{3}\s+(\d+(?:\.\d+)?)/i);
   return match ? Number(match[1]) : 0;
 }
 
@@ -121,6 +126,9 @@ function mapAtRisk(items: AtRiskItem[]): InvoiceRisk[] {
     dueDate: "",
     riskScore: item.riskScore,
     reason: item.reason,
+    recoveryProbability: item.recoveryProbability,
+    expectedDaysToCollect: item.expectedDaysToCollect,
+    expectedRecovery: item.expectedRecovery.amount,
   }));
 }
 
@@ -225,6 +233,14 @@ function toControlRoomData(
   revenue: ApiEnvelope<RevenueData>,
 ): ControlRoomData {
   const normalized = normalizeLiquidity(liquidity);
+  const lapsedCustomers = mapLapsed(revenue.data.items);
+  // Lapsed-customer value only — repeat-buyer upsell isn't "recovery," and lapsed
+  // value already double-counts against overdue receivables for anyone also at risk
+  // (see recoverableCash, which is the honest overdue-recovery number).
+  const revenueOpportunityTotal = lapsedCustomers.reduce(
+    (sum, c) => sum + c.recoveryPotential,
+    0,
+  );
 
   return {
     snapshot: {
@@ -235,7 +251,8 @@ function toControlRoomData(
       currency: "GBP",
       currentCash: normalized.cash,
       overdueReceivables: summary.data.overdueReceivables.amount,
-      revenueOpportunityTotal: revenue.data.estimatedRevenueUnlock.amount,
+      recoverableCash: atRisk.data.totalRecoverableCash.amount,
+      revenueOpportunityTotal,
     },
     liquidity: {
       dso: normalized.dso,
@@ -249,7 +266,7 @@ function toControlRoomData(
     },
     atRiskInvoices: mapAtRisk(atRisk.data.items),
     supplierOpportunities: [],
-    lapsedCustomers: mapLapsed(revenue.data.items),
+    lapsedCustomers,
     repeatBuyers: mapRepeatBuyers(revenue.data.items),
     drafts: [],
     audit: [],
@@ -314,6 +331,13 @@ export async function fetchControlRoom(): Promise<ControlRoomData> {
     fetchEnvelope<AtRiskData>("/api/invoices/at-risk"),
     fetchEnvelope<RevenueData>("/api/revenue-opportunities"),
   ]);
+
+  // No Xero connection yet: show the curated Acme Trading Co. demo dataset
+  // (with narrative negotiation drafts + audit trail) instead of the thin
+  // synthetic fixtures behind the fallback API endpoints.
+  if (summary.mode === "fallback") {
+    return seedData;
+  }
 
   warnIfModeMismatch(summary, [
     { label: "/api/liquidity", envelope: liquidity },
