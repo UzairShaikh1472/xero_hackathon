@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "mode": "fallback",
+  "generatedAt": "2026-07-04T14:00:00Z",
+  "data": {
+    "organizationName": "Northstar Services Ltd",
+    "currency": "GBP",
+    "totalInvoices": 2,
+    "contactsCount": 2,
+    "totalOutstandingReceivables": {
+      "amount": 11350,
+      "currency": "GBP"
+    },
+    "overdueReceivables": {
+      "amount": 8200,
+      "currency": "GBP"
+    },
+    "averageInvoiceValue": {
+      "amount": 5675,
+      "currency": "GBP"
+    },
+    "overdueInvoicesCount": 1,
+    "atRiskInvoicesCount": 1,
+    "suggestedActionsCount": 2
+  }
+}

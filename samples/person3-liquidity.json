@@ -1,0 +1,29 @@
+{
+  "ok": true,
+  "mode": "fallback",
+  "generatedAt": "2026-07-04T14:00:00Z",
+  "data": {
+    "currency": "GBP",
+    "currentCash": null,
+    "receivablesDue30d": {
+      "amount": 11350,
+      "currency": "GBP"
+    },
+    "payablesDue30d": {
+      "amount": 0,
+      "currency": "GBP"
+    },
+    "receivablesOverdue": {
+      "amount": 8200,
+      "currency": "GBP"
+    },
+    "projectedGap30d": {
+      "amount": -11350,
+      "currency": "GBP"
+    },
+    "dso": 21,
+    "dpo": 0,
+    "ccc": 21,
+    "status": "critical"
+  }
+}

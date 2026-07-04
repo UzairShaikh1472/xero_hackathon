@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "mode": "fallback",
+  "generatedAt": "2026-07-04T14:00:00Z",
+  "data": {
+    "organizationName": "Northstar Services Ltd",
+    "currency": "GBP",
+    "totalAtRisk": 2,
+    "items": [
+      {
+        "id": "risk_inv_demo_001",
+        "invoiceId": "inv_demo_001",
+        "invoiceNumber": "INV-001",
+        "contactId": "contact_demo_001",
+        "contactName": "Acorn Retail",
+        "amountDue": {
+          "amount": 8200,
+          "currency": "GBP"
+        },
+        "daysOverdue": 10,
+        "priority": "high",
+        "riskScore": 81,
+        "reason": "Acorn Retail is 10 days overdue on INV-001.",
+        "recommendedAction": "Draft an urgent collection message and route for same-day follow-up."
+      }
+    ]
+  }
+}
