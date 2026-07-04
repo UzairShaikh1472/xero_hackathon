@@ -16,7 +16,7 @@
         "currency": "GBP"
       },
       "subjectLine": "Quick settlement option for INV-001",
-      "draftMessage": "Hi Acorn Retail, we noticed INV-001 is still outstanding. If payment can be completed this week, we can offer a 3% early settlement discount to help close it promptly.",
+      "draftMessage": "We noticed INV-001 is still outstanding. If payment can be completed this week, we can offer a 3% early settlement discount to help close it promptly.",
       "metadata": {
         "tone": "firm",
         "discountPercent": 3,
