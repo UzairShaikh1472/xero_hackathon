@@ -44,9 +44,6 @@ function AppShell() {
     tourStep,
     setOpenDraft,
     handleSimulate,
-    handleSendEmail,
-    handleSendVoiceInvite,
-    handleStartCall,
     handleConnectXero,
     handleRefresh,
     refetch,
@@ -92,13 +89,8 @@ function AppShell() {
           communication={
             communications.find((c) => c.draftId === openDraft.id) ?? null
           }
-          emailConfigured={health?.emailConfigured ?? false}
-          browserVoiceConfigured={health?.browserVoiceConfigured ?? false}
           onClose={() => setOpenDraft(null)}
           onSimulate={handleSimulate}
-          onSendEmail={handleSendEmail}
-          onSendVoiceInvite={handleSendVoiceInvite}
-          onStartCall={handleStartCall}
         />
       ) : null}
 

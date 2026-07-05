@@ -72,6 +72,9 @@ export async function buildLiquidityResponse(): Promise<ApiEnvelope<LiquiditySna
       projectedInflow: projection.projectedInflow,
       projectedOutflow: projection.projectedOutflow,
       lastMonthCashFlow: phaseOne.sync.lastMonthCashFlow ?? 0,
+      lastMonthCashFlowAvailable: phaseOne.sync.lastMonthCashFlowAvailable ?? false,
+      currentCashSource: phaseOne.sync.bankCashSource ?? "derived",
+      currentCashNote: phaseOne.sync.bankCashNote,
     }
   };
 }

@@ -16,6 +16,12 @@ import type {
 } from "../domain/types.js";
 import { HttpError } from "../utils/http-error.js";
 import { logger } from "../utils/logger.js";
+import { appendActivityLog } from "../utils/activity-log-store.js";
+import {
+  deriveDraftLogStep,
+  getDraftInvoiceId,
+  getDraftInvoiceNumber,
+} from "../utils/activity-log-helpers.js";
 import { getStoredDraft } from "../utils/idempotency.js";
 import { recordFollowUp } from "../utils/follow-up-store.js";
 import { REACTIVATION_VOICE_THRESHOLD_DAYS } from "../../engines/revenue.js";
@@ -200,6 +206,37 @@ function buildCallScript(draft: NegotiationDraft) {
     "If not, we would appreciate settlement as soon as possible, or a quick reply to confirm your expected payment date.",
     "Thank you for your time and continued partnership."
   ].join(" ");
+}
+
+function logDraftCommunication(
+  draft: NegotiationDraft,
+  input: {
+    eventType: "email_sent" | "voice_invite_sent" | "call_queued" | "call_started";
+    title: string;
+    detail?: string;
+    channel: "email" | "call" | "voice_invite";
+    providerId?: string;
+    metadata?: Record<string, string | number | boolean | null>;
+  },
+) {
+  appendActivityLog({
+    eventType: input.eventType,
+    actor: "system",
+    step: input.eventType === "email_sent" ? "email" : "agent_call",
+    title: input.title,
+    detail: input.detail,
+    draftId: draft.id,
+    targetId: draft.targetId,
+    targetName: draft.targetName,
+    invoiceId: getDraftInvoiceId(draft),
+    invoiceNumber: getDraftInvoiceNumber(draft),
+    channel: input.channel,
+    amount: draft.expectedImpact.amount,
+    currency: draft.currency,
+    providerId: input.providerId,
+    status: "completed",
+    metadata: input.metadata,
+  });
 }
 
 async function sendWithSmtp(
@@ -397,6 +434,17 @@ export async function buildSendDraftEmailResponse(
   });
 
   trackFollowUp(draft, "email");
+  logDraftCommunication(draft, {
+    eventType: "email_sent",
+    title: draft.type === "reengagement_quote" ? "Win-back email sent" : "Reminder email sent",
+    detail: `Delivered to ${recipientEmail}`,
+    channel: "email",
+    providerId: info.messageId,
+    metadata: {
+      recipientEmail,
+      subjectLine: draft.subjectLine,
+    },
+  });
 
   const emailLabel =
     draft.type === "reengagement_quote" ? "Win-back email" : "Reminder email";
@@ -526,6 +574,18 @@ export async function buildSendVoiceInviteResponse(
   });
 
   trackFollowUp(stored, "call");
+  logDraftCommunication(stored, {
+    eventType: "voice_invite_sent",
+    title: stored.type === "reengagement_quote" ? "Reactivation voice invite sent" : "Collections voice invite sent",
+    detail: `Delivered to ${recipientEmail}`,
+    channel: "voice_invite",
+    providerId: info.messageId,
+    metadata: {
+      recipientEmail,
+      subjectLine: outboundDraft.subjectLine,
+      callUrl,
+    },
+  });
 
   return {
     ok: true,
@@ -578,6 +638,17 @@ export async function buildPlaceDraftCallResponse(
   });
 
   trackFollowUp(draft, "call");
+  logDraftCommunication(draft, {
+    eventType: "call_queued",
+    title: "Reminder call queued",
+    detail: `Queued to ${recipientPhone}`,
+    channel: "call",
+    providerId: result.sid,
+    metadata: {
+      recipientPhone,
+      scriptPreview: script,
+    },
+  });
 
   return {
     ok: true,
@@ -615,6 +686,16 @@ export async function buildCreateVoiceSessionResponse(draftId: string, invoiceId
 
   const token = createVoiceSessionFromDraft(draft);
   const callUrl = buildCallUrl(token);
+  logDraftCommunication(draft, {
+    eventType: "call_started",
+    title: "Browser voice call started",
+    detail: `Interactive call launched for ${draft.targetName}`,
+    channel: "call",
+    metadata: {
+      callUrl,
+      token,
+    },
+  });
 
   return {
     ok: true,

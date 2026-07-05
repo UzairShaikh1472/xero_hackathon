@@ -1,3 +1,5 @@
+import { UpFlowBrand } from "@/components/control-room/upflow-logo";
+
 export function AppLoadingState() {
   return (
     <div className="flex min-h-[52vh] flex-col items-center justify-center px-6">
@@ -17,7 +19,9 @@ export function AppLoadingState() {
           <div className="text-[0.68rem] uppercase tracking-[0.34em] text-sky-700/70">
             Loading
           </div>
-          <div className="mt-2 font-serif text-4xl text-primary">UpFlow</div>
+          <div className="mt-3 flex justify-center">
+            <UpFlowBrand size={38} textClassName="text-4xl" />
+          </div>
         </div>
       </div>
 

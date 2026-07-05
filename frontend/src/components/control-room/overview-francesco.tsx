@@ -6,6 +6,7 @@ import type {
   ExecutionResult,
   NegotiationDraft,
 } from "@/lib/kinetic/types";
+import { filterActionableDrafts } from "@/lib/kinetic/action-activity";
 import { groupFollowUps } from "@/lib/kinetic/follow-up";
 import { cn } from "@/lib/utils";
 
@@ -24,21 +25,22 @@ type OverviewFrancescoProps = {
 export function OverviewFrancesco({
   activeAnchor,
   data,
-  executedTotal,
 }: OverviewFrancescoProps) {
   const atRiskInvoices = data.atRiskInvoices ?? [];
   const lapsedCustomers = data.lapsedCustomers ?? [];
   const repeatBuyers = data.repeatBuyers ?? [];
 
-  const overdueCount = atRiskInvoices.length;
+  const overdueCount = atRiskInvoices.filter((inv) => inv.daysOverdue > 0).length;
 
-  const atRiskNames = new Set(atRiskInvoices.map((inv) => inv.customer));
-  const lapsedNames = new Set(lapsedCustomers.map((c) => c.name));
-  const loyaltyCount =
-    repeatBuyers.filter((c) => !lapsedNames.has(c.name)).length +
-    lapsedCustomers.filter((c) => !atRiskNames.has(c.name)).length;
+  const loyaltyCount = new Set([
+    ...repeatBuyers.filter((c) => c.upsellPotential > 0).map((c) => c.name),
+    ...lapsedCustomers.filter((c) => c.recoveryPotential > 0).map((c) => c.name),
+  ]).size;
 
-  const groups = groupFollowUps(data.drafts ?? []);
+  const readyDrafts = filterActionableDrafts(data.drafts ?? [], {
+    audit: data.audit,
+  });
+  const groups = groupFollowUps(readyDrafts);
   const emailCount = groups.email.length;
   const voiceCount = groups.agentCall.length;
   const humanCount = groups.humanCall.length;
@@ -63,11 +65,13 @@ export function OverviewFrancesco({
           </div>
 
           <KpiStrip
-            currentCash={data.snapshot.currentCash + executedTotal}
+            currentCash={data.snapshot.currentCash}
+            currentCashSource={data.snapshot.currentCashSource}
+            currentCashNote={data.snapshot.currentCashNote}
             lastMonthCashFlow={data.snapshot.lastMonthCashFlow}
+            lastMonthCashFlowAvailable={data.snapshot.lastMonthCashFlowAvailable}
             recoverableCash={data.snapshot.recoverableCash}
             opportunityTotal={data.snapshot.revenueOpportunityTotal}
-            executedTotal={executedTotal}
             overdueCount={overdueCount}
             loyaltyCount={loyaltyCount}
           />
@@ -76,6 +80,7 @@ export function OverviewFrancesco({
 
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-2.5">
+          <span className="inline-flex size-2 rounded-full bg-accent" />
           <h2 className="font-serif text-xl leading-none tracking-tight text-foreground">
             Actions in summary
           </h2>

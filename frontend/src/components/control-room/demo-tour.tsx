@@ -30,7 +30,7 @@ export const TOUR_STEPS: TourStep[] = [
     body:
       "Acme has GBP 48k on hand today. GBP 62k of overdue receivables is stuck money. Recoverable cash discounts it for collection risk and delay, and Projected cash shows what your balance becomes if that recovery, plus other revenue opportunities, actually lands.",
     narration:
-      "This top strip is the fastest way to understand the business right now. Current cash is what the company has on hand today. Overdue receivables is money customers should already have paid. Recoverable cash is the more realistic number, because it adjusts those invoices for collection risk and timing. Revenue opportunities adds likely upside from repeat buyers and reactivation, so you can see where more cash may come from next.",
+      "This top strip is the fastest way to understand the business right now. Current cash is the live Xero bank balance when available, or a clearly marked estimated cash position when bank-balance access is unavailable. Overdue receivables is money customers should already have paid. Recoverable cash is the more realistic number, because it adjusts those invoices for collection risk and timing. Revenue opportunities adds likely upside from repeat buyers and reactivation, so you can see where more cash may come from next.",
   },
   {
     anchor: "cash",

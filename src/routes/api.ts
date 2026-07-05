@@ -15,6 +15,7 @@ import {
   buildSendDraftEmailResponse,
   buildSendVoiceInviteResponse
 } from "../lib/services/communications-service.js";
+import { buildActivityLogResponse } from "../lib/services/activity-log-service.js";
 import { buildDemoNarrationResponse } from "../lib/services/demo-narration-service.js";
 import { buildExecutionHistoryResponse } from "../lib/services/execution-history-service.js";
 import { buildFollowUpsResponse } from "../lib/services/resolved-actions-service.js";
@@ -100,6 +101,15 @@ apiRouter.get("/executions/history", async (_request, response, next) => {
 apiRouter.get("/actions/follow-ups", async (_request, response, next) => {
   try {
     const payload = await buildFollowUpsResponse();
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.get("/activity/logs", async (_request, response, next) => {
+  try {
+    const payload = await buildActivityLogResponse();
     response.json(payload);
   } catch (error) {
     next(error);

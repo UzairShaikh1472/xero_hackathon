@@ -92,6 +92,25 @@ function followUpChannelKey(channel: "email" | "call") {
   return channel === "email" ? "email" : "agent_call";
 }
 
+function auditKind(entry: AuditEntry): TimelineEventKind {
+  switch (entry.kind) {
+    case "email_sent":
+      return "email_sent";
+    case "voice_invite_sent":
+      return "voice_invite";
+    case "call_queued":
+    case "call_started":
+    case "call_turn":
+    case "call_completed":
+    case "call_report_sent":
+      return "call_started";
+    case "simulation_recorded":
+      return "simulated";
+    default:
+      return "audit";
+  }
+}
+
 function sortByTimeDesc(events: TimelineEvent[]) {
   return [...events].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 }
@@ -112,12 +131,20 @@ export function buildEscalationTimeline({
   const draftById = new Map(drafts.map((d) => [d.id, d]));
   const resolvedDraftIds = new Set((followUps?.resolved ?? []).map((r) => r.draftId));
   const sentKeys = new Set<string>();
+  const persistedSentKeys = new Set<string>();
   const buckets: Record<EscalationStepKey, TimelineEvent[]> = {
     email: [],
     agent_call: [],
     human_call: [],
     resolved: [],
   };
+
+  for (const entry of audit) {
+    if (entry.draftId && entry.channel) {
+      const key = `${entry.draftId}:${entry.channel === "email" ? "email" : "call"}`;
+      persistedSentKeys.add(key);
+    }
+  }
 
   for (const comm of communications) {
     const at = comm.sentAt ?? new Date().toISOString();
@@ -139,7 +166,7 @@ export function buildEscalationTimeline({
   for (const record of followUps?.open ?? []) {
     const step = followUpChannelKey(record.channel);
     const key = `${record.draftId}:${record.channel}`;
-    if (sentKeys.has(key)) continue;
+    if (sentKeys.has(key) || persistedSentKeys.has(key)) continue;
 
     buckets[step].push({
       id: `open_${record.id}`,
@@ -224,17 +251,17 @@ export function buildEscalationTimeline({
   }
 
   for (const entry of audit) {
-    if (!entry.action.toLowerCase().includes("draft")) continue;
-
-    buckets.email.push({
+    const step = entry.step ?? "email";
+    buckets[step].push({
       id: `audit_${entry.id}`,
       at: entry.at,
-      kind: "audit",
-      step: "email",
+      kind: auditKind(entry),
+      step,
       title: entry.action,
       detail: entry.rationale,
       contactName: entry.target,
-      status: "completed",
+      amount: entry.amount,
+      status: entry.status ?? "completed",
     });
   }
 

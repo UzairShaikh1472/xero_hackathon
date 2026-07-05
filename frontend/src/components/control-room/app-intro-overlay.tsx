@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { UpFlowBrand } from "@/components/control-room/upflow-logo";
 
 const INTRO_KEY = "upflow-home-intro-v2";
 
@@ -72,7 +73,9 @@ export function AppIntroOverlay() {
           <div className="text-[0.68rem] uppercase tracking-[0.34em] text-sky-700/65">
             Welcome
           </div>
-          <div className="mt-2 font-serif text-5xl text-primary">UpFlow</div>
+          <div className="mt-3 flex justify-center">
+            <UpFlowBrand size={44} textClassName="text-5xl" />
+          </div>
         </div>
       </div>
     </div>

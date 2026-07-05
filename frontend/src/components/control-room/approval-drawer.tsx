@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, Phone } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { CheckCircle2, ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -46,40 +46,15 @@ export function ApprovalDrawer({
   draft,
   execution,
   communication,
-  emailConfigured,
-  browserVoiceConfigured,
   onClose,
   onSimulate,
-  onSendEmail,
-  onSendVoiceInvite,
-  onStartCall,
 }: {
   draft: NegotiationDraft;
   execution: ExecutionResult | null;
   communication: CommunicationResult | null;
-  emailConfigured: boolean;
-  browserVoiceConfigured: boolean;
   onClose: () => void;
   onSimulate: (d: NegotiationDraft) => void;
-  onSendEmail: (d: NegotiationDraft, edits: { subject: string; body: string }) => Promise<void>;
-  onSendVoiceInvite: (
-    d: NegotiationDraft,
-    edits: { subject: string; body: string },
-  ) => Promise<void>;
-  onStartCall: (d: NegotiationDraft) => Promise<void>;
 }) {
-  const [body, setBody] = useState("");
-  const [subject, setSubject] = useState("");
-  const [sending, setSending] = useState(false);
-  const activeId = draft?.id;
-
-  useEffect(() => {
-    if (draft) {
-      setBody(draft.body);
-      setSubject(draft.subject);
-    }
-  }, [activeId, draft]);
-
   const daysOverdue = getDaysOverdue(draft);
   const daysSilent = getDaysSilent(draft);
   const canEmail =
@@ -91,33 +66,6 @@ export function ApprovalDrawer({
   const latePaymentEstimate =
     draft.agent === "receivables" ? draft.latePaymentEstimate : undefined;
 
-  const handleSendEmail = async () => {
-    setSending(true);
-    try {
-      await onSendEmail(draft, { subject, body });
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleSendVoiceInvite = async () => {
-    setSending(true);
-    try {
-      await onSendVoiceInvite(draft, { subject, body });
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleStartCall = async () => {
-    setSending(true);
-    try {
-      await onStartCall(draft);
-    } finally {
-      setSending(false);
-    }
-  };
-
   return (
     <Sheet
       open
@@ -127,7 +75,7 @@ export function ApprovalDrawer({
     >
       <SheetContent
         side="right"
-        className="z-[100] w-full sm:max-w-lg bg-surface border-l hairline flex flex-col"
+        className="z-[100] flex w-full flex-col border-l hairline bg-surface sm:max-w-lg"
       >
         <>
           <SheetHeader>
@@ -140,171 +88,156 @@ export function ApprovalDrawer({
                   : "Extend"}{" "}
               | {draft.targetName}
             </SheetTitle>
-              <SheetDescription className="text-muted-foreground">
-                {draft.proposedAction}
-              </SheetDescription>
-            </SheetHeader>
+            <SheetDescription className="text-muted-foreground">
+              {draft.proposedAction}
+            </SheetDescription>
+          </SheetHeader>
 
-            <ScrollArea className="-mx-6 flex-1 px-6">
-              <div className="space-y-5 py-4">
-                <div className="grid grid-cols-3 gap-2">
-                  <StatBlock label="Expected cash" value={gbp(draft.expectedCashImpact, { signed: true })} tone="positive" />
-                  <StatBlock label="Impact ETA" value={`~${draft.hoursToImpact}h`} />
-                  <StatBlock label="Confidence" value={pct(draft.confidence)} />
-                </div>
+          <ScrollArea className="-mx-6 flex-1 px-6">
+            <div className="space-y-5 py-4">
+              <div className="grid grid-cols-3 gap-2">
+                <StatBlock
+                  label="Expected cash"
+                  value={gbp(draft.expectedCashImpact, { signed: true })}
+                  tone="positive"
+                />
+                <StatBlock label="Impact ETA" value={`~${draft.hoursToImpact}h`} />
+                <StatBlock label="Confidence" value={pct(draft.confidence)} />
+              </div>
 
-                {latePaymentEstimate && (
-                  <div className="rounded-2xl border hairline bg-surface-2/55 p-4">
-                    <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                      UK late-payment estimate
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <StatBlock label="Original amount" value={gbp(latePaymentEstimate.principalAmount)} />
-                      <StatBlock label="Legal total" value={gbp(latePaymentEstimate.updatedBalance)} tone="positive" />
-                      <StatBlock label="Interest" value={gbp(latePaymentEstimate.statutoryInterest)} />
-                      <StatBlock label="Recovery fee" value={gbp(latePaymentEstimate.fixedCompensation)} />
-                    </div>
-                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                      {`Estimate uses the UK statutory late-payment rate of ${latePaymentEstimate.statutoryAnnualRatePercent.toFixed(2)}% (${latePaymentEstimate.statutoryBaseRatePercent.toFixed(2)}% Bank Rate + 8.00%) for the current reference window.`}
-                    </p>
+              {latePaymentEstimate && (
+                <div className="rounded-2xl border hairline bg-surface-2/55 p-4">
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                    UK late-payment estimate
                   </div>
-                )}
-
-                <div>
-                  <div className="text-xs uppercase tracking-wider text-muted-foreground">Rationale</div>
-                  <p className="mt-1 text-sm">{draft.reason}</p>
-                </div>
-
-                <Separator className="bg-hairline" />
-
-                <div>
-                  <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">
-                    Subject
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <StatBlock
+                      label="Original amount"
+                      value={gbp(latePaymentEstimate.principalAmount)}
+                    />
+                    <StatBlock
+                      label="Legal total"
+                      value={gbp(latePaymentEstimate.updatedBalance)}
+                      tone="positive"
+                    />
+                    <StatBlock
+                      label="Interest"
+                      value={gbp(latePaymentEstimate.statutoryInterest)}
+                    />
+                    <StatBlock
+                      label="Recovery fee"
+                      value={gbp(latePaymentEstimate.fixedCompensation)}
+                    />
                   </div>
-                  <Textarea
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    rows={2}
-                    className="bg-surface-2 border-hairline font-sans text-sm"
-                  />
-                </div>
-
-                <div>
-                  <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">
-                    Draft message
-                  </div>
-                  <Textarea
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    rows={10}
-                    className="bg-surface-2 border-hairline font-sans text-sm"
-                  />
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    {canVoice && draft.agent === "reengagement"
-                      ? `Inactive ${daysSilent}+ days — voice agent invite. Greeting and call link are added when sent.`
-                      : canEmail && draft.agent === "reengagement"
-                        ? `Inactive under ${REACTIVATION_VOICE_THRESHOLD_DAYS} days — win-back email. Greeting and sign-off are added automatically when sent.`
-                        : "Greeting, invoice summary, and sign-off are added automatically when sent."}
+                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                    {`Estimate uses the UK statutory late-payment rate of ${latePaymentEstimate.statutoryAnnualRatePercent.toFixed(2)}% (${latePaymentEstimate.statutoryBaseRatePercent.toFixed(2)}% Bank Rate + 8.00%) for the current reference window.`}
                   </p>
                 </div>
+              )}
 
-                {execution && (
-                  <div className="rounded-md border border-positive/40 bg-positive/10 p-3 text-sm">
-                    <div className="flex items-center gap-2 font-medium text-positive">
-                      <CheckCircle2 className="size-4" />
-                      Simulated
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">{execution.note}</div>
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Rationale
+                </div>
+                <p className="mt-1 text-sm">{draft.reason}</p>
+              </div>
+
+              <Separator className="bg-hairline" />
+
+              <div>
+                <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">
+                  Subject
+                </div>
+                <Textarea
+                  value={draft.subject}
+                  readOnly
+                  rows={2}
+                  className="border-hairline bg-surface-2 font-sans text-sm"
+                />
+              </div>
+
+              <div>
+                <div className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">
+                  Draft message
+                </div>
+                <Textarea
+                  value={draft.body}
+                  readOnly
+                  rows={10}
+                  className="border-hairline bg-surface-2 font-sans text-sm"
+                />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {canVoice && draft.agent === "reengagement"
+                    ? `Inactive ${daysSilent}+ days - this moves to the Actions page as a voice-agent step.`
+                    : canEmail && draft.agent === "reengagement"
+                      ? `Inactive under ${REACTIVATION_VOICE_THRESHOLD_DAYS} days - send this from the Actions page as a win-back email.`
+                      : "Use the Actions page to send the final email or call step."}
+                </p>
+              </div>
+
+              {execution && (
+                <div className="rounded-md border border-positive/40 bg-positive/10 p-3 text-sm">
+                  <div className="flex items-center gap-2 font-medium text-positive">
+                    <CheckCircle2 className="size-4" />
+                    Simulated
                   </div>
-                )}
+                  <div className="mt-1 text-xs text-muted-foreground">{execution.note}</div>
+                </div>
+              )}
 
-                {communication && (
-                  <div className="rounded-md border border-primary/40 bg-primary/10 p-3 text-sm">
-                    <div className="flex items-center gap-2 font-medium text-primary">
-                      <CheckCircle2 className="size-4" />
-                      {communication.channel === "voice_invite"
-                        ? "Voice invite sent"
+              {communication && (
+                <div className="rounded-md border border-primary/40 bg-primary/10 p-3 text-sm">
+                  <div className="flex items-center gap-2 font-medium text-primary">
+                    <CheckCircle2 className="size-4" />
+                    {communication.channel === "voice_invite"
+                      ? "Voice invite sent"
+                      : communication.channel === "call"
+                        ? "Call started"
                         : "Email sent"}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">{communication.message}</div>
-                    {communication.callUrl && (
-                      <a
-                        href={communication.callUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 inline-block text-xs text-primary underline"
-                      >
-                        Open call link
-                      </a>
-                    )}
                   </div>
-                )}
-              </div>
-            </ScrollArea>
-
-            <SheetFooter className="flex-col gap-3 border-t hairline pt-4 sm:flex-col sm:justify-start">
-              <div className="flex w-full flex-wrap justify-between gap-2">
-                <Button variant="ghost" onClick={onClose}>
-                  Close
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => onSimulate(draft)}
-                  className="border-hairline"
-                  disabled={sending}
-                >
-                  Simulate execution
-                </Button>
-              </div>
-
-              <div className="flex w-full flex-wrap gap-2">
-                {canEmail && (
-                  <Button
-                    onClick={() => void handleSendEmail()}
-                    disabled={sending || !emailConfigured}
-                    className="flex-1"
-                  >
-                    {sending ? <Loader2 className="size-4 animate-spin" /> : null}
-                    {draft.agent === "reengagement" ? "Approve & send win-back" : "Approve & send email"}
-                  </Button>
-                )}
-
-                {canVoice && (
-                  <>
-                    <Button
-                      onClick={() => void handleSendVoiceInvite()}
-                      disabled={sending || !emailConfigured || !browserVoiceConfigured}
-                      className="flex-1"
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {communication.message}
+                  </div>
+                  {communication.callUrl && (
+                    <a
+                      href={communication.callUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-block text-xs text-primary underline"
                     >
-                      {sending ? <Loader2 className="size-4 animate-spin" /> : null}
-                      {draft.agent === "reengagement"
-                        ? "Send reactivation agent invite"
-                        : "Send call agent"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => void handleStartCall()}
-                      disabled={sending || !browserVoiceConfigured}
-                      className="flex-1 border-hairline"
-                    >
-                      <Phone className="size-4" />
-                      Start call now
-                    </Button>
-                  </>
-                )}
-              </div>
+                      Open call link
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
 
-              {canEmail && !emailConfigured && (
-                <p className="text-xs text-muted-foreground">
-                  Configure SMTP_* and COMMUNICATIONS_TEST_EMAIL in backend .env to send real emails.
-                </p>
-              )}
-              {canVoice && !browserVoiceConfigured && (
-                <p className="text-xs text-muted-foreground">
-                  Configure GEMINI_API_KEY, AI_API_KEY, or VAPI keys in backend .env for browser voice.
-                </p>
-              )}
-            </SheetFooter>
+          <SheetFooter className="flex-col gap-3 border-t hairline pt-4 sm:flex-col sm:justify-start">
+            <div className="flex w-full flex-wrap justify-between gap-2">
+              <Button variant="ghost" onClick={onClose}>
+                Close
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => onSimulate(draft)}
+                className="border-hairline"
+              >
+                Simulate execution
+              </Button>
+            </div>
+
+            <Button asChild className="w-full">
+              <Link
+                to="/app/actions"
+                search={{ customer: draft.targetName }}
+                onClick={onClose}
+              >
+                Open in Actions
+                <ExternalLink className="size-4" />
+              </Link>
+            </Button>
+          </SheetFooter>
         </>
       </SheetContent>
     </Sheet>
@@ -329,4 +262,3 @@ function StatBlock({
     </div>
   );
 }
-

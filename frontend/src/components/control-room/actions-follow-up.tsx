@@ -60,6 +60,7 @@ export function ActionsFollowUp({
   drafts,
   emailConfigured,
   browserVoiceConfigured,
+  highlightCustomer,
   onSendEmail,
   onSendVoiceInvite,
   onStartCall,
@@ -67,6 +68,7 @@ export function ActionsFollowUp({
   drafts: NegotiationDraft[];
   emailConfigured: boolean;
   browserVoiceConfigured: boolean;
+  highlightCustomer?: string;
   onSendEmail: (
     draft: NegotiationDraft,
     edits: { subject: string; body: string },
@@ -95,6 +97,7 @@ export function ActionsFollowUp({
             drafts={groups[channel.key === "email" ? "email" : channel.key === "agent_call" ? "agentCall" : "humanCall"]}
             emailConfigured={emailConfigured}
             browserVoiceConfigured={browserVoiceConfigured}
+            highlightCustomer={highlightCustomer}
             onSendEmail={onSendEmail}
             onSendVoiceInvite={onSendVoiceInvite}
             onStartCall={onStartCall}
@@ -110,6 +113,7 @@ function FollowUpColumn({
   drafts,
   emailConfigured,
   browserVoiceConfigured,
+  highlightCustomer,
   onSendEmail,
   onSendVoiceInvite,
   onStartCall,
@@ -118,6 +122,7 @@ function FollowUpColumn({
   drafts: NegotiationDraft[];
   emailConfigured: boolean;
   browserVoiceConfigured: boolean;
+  highlightCustomer?: string;
   onSendEmail: (
     draft: NegotiationDraft,
     edits: { subject: string; body: string },
@@ -219,7 +224,11 @@ function FollowUpColumn({
           drafts.map((draft) => (
             <div
               key={draft.id}
-              className="rounded-2xl border hairline bg-surface-2/52 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/68"
+              className={cn(
+                "rounded-2xl border hairline bg-surface-2/52 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/68",
+                highlightCustomer === draft.targetName &&
+                  "border-primary/40 bg-primary/5 ring-1 ring-primary/20",
+              )}
               style={{
                 boxShadow:
                   channel.key === "agent_call"

@@ -54,8 +54,8 @@ export function snapshotToNormalized(snapshot: PhaseOneSnapshot): NormalizedData
   return {
     cash: snapshot.sync.source === "fallback"
       ? 48200
-      : (snapshot.sync.bankCash ?? 0) > 0
-        ? snapshot.sync.bankCash!
+      : snapshot.sync.bankCashSource === "bank" && typeof snapshot.sync.bankCash === "number"
+        ? snapshot.sync.bankCash
         : Math.max(0, receivableTotals - payableTotals),
     asOfDate,
     invoices,

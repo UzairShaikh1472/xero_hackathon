@@ -45,6 +45,17 @@ export function WelcomeHero({ data }: { data: ControlRoomData }) {
   );
   const emailReady = data.drafts.filter((draft) => (draft.daysOverdue ?? 0) < 14).length;
   const voiceReady = data.drafts.filter((draft) => (draft.daysOverdue ?? 0) >= 14).length;
+  const currentCashSummary =
+    data.snapshot.currentCashSource === "bank"
+      ? "Live Xero bank balance"
+      : "Estimated cash position";
+  const currentCashDetail =
+    data.snapshot.currentCashSource === "bank"
+      ? data.snapshot.lastMonthCashFlowAvailable
+        ? `Last month net flow ${gbp(data.snapshot.lastMonthCashFlow)}`
+        : "Live Xero bank balance"
+      : data.snapshot.currentCashNote ??
+        "Estimated from open Xero invoices because live bank balance data is unavailable.";
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-6 px-4 pb-10 pt-3 sm:px-6 sm:pb-14 sm:pt-5">
@@ -127,6 +138,7 @@ export function WelcomeHero({ data }: { data: ControlRoomData }) {
               <div className="numeric mt-1 text-2xl font-semibold text-foreground">
                 {gbp(data.snapshot.currentCash)}
               </div>
+              <div className="mt-1 text-xs text-muted-foreground">{currentCashSummary}</div>
             </div>
           </div>
 
@@ -199,6 +211,7 @@ export function WelcomeHero({ data }: { data: ControlRoomData }) {
               label="Current cash"
               value={gbp(data.snapshot.currentCash)}
               icon={<Landmark className="size-4" />}
+              subtitle={currentCashDetail}
             />
             <PreviewKpi
               label="Overdue receivables"

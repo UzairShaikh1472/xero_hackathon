@@ -5,6 +5,7 @@ import { buildVoiceCollectionSystemPrompt } from "../../agents/voiceCollectionPr
 import { buildVoiceReengagementSystemPrompt } from "../../agents/voiceReengagementPrompt.js";
 import type { ApiEnvelope, VoiceChatRequest, VoiceChatResponse } from "../domain/types.js";
 import { HttpError } from "../utils/http-error.js";
+import { appendActivityLog } from "../utils/activity-log-store.js";
 import { buildElevenLabsAudioUrl } from "./elevenlabs-tts-service.js";
 import { getPhaseOneSnapshotData } from "./phase-one-sync-service.js";
 import { getVoiceSessionForChat } from "./voice-session-service.js";
@@ -123,6 +124,28 @@ async function buildVoicePayload(
     generatedAt: new Date().toISOString(),
     data: audioUrl ? { reply, audioUrl, audioProvider: "elevenlabs" } : { reply }
   };
+}
+
+function logCallTurn(
+  session: ReturnType<typeof getVoiceSessionForChat>,
+  actor: "client" | "agent",
+  title: string,
+  detail: string,
+) {
+  appendActivityLog({
+    eventType: "call_turn",
+    actor,
+    step: "agent_call",
+    title,
+    detail,
+    draftId: session.draftId,
+    targetId: session.draftId,
+    targetName: session.contactName,
+    invoiceNumber: session.invoiceNumber,
+    amount: session.amountDue,
+    currency: session.currency,
+    status: "completed",
+  });
 }
 
 function extractSpecificDate(message: string) {
@@ -314,6 +337,8 @@ export async function buildVoiceChatResponse(
     asksPurpose(message) ||
     asksRepeat(message)
   ) {
+    logCallTurn(session, "client", "Customer reply captured", message);
+    logCallTurn(session, "agent", "Agent response generated", deterministicReply);
     return buildVoicePayload(snapshot.sync.source, deterministicReply);
   }
 
@@ -352,6 +377,9 @@ export async function buildVoiceChatResponse(
       reply = deterministicReply;
     }
   }
+
+  logCallTurn(session, "client", "Customer reply captured", message);
+  logCallTurn(session, "agent", "Agent response generated", reply);
 
   return buildVoicePayload(snapshot.sync.source, reply);
 }

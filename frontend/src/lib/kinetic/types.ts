@@ -12,7 +12,10 @@ export interface CompanySnapshot {
   mode: "live" | "fallback";
   currency: Currency;
   currentCash: number;
+  currentCashSource?: "bank" | "derived";
+  currentCashNote?: string;
   lastMonthCashFlow: number;
+  lastMonthCashFlowAvailable?: boolean;
   overdueReceivables: number;
   statutoryInterestEstimate?: number;
   fixedCompensationEstimate?: number;
@@ -159,6 +162,21 @@ export interface AuditEntry {
   target: string;
   rationale: string;
   humanInLoop: boolean;
+  kind?:
+    | "email_sent"
+    | "voice_invite_sent"
+    | "call_queued"
+    | "call_started"
+    | "call_turn"
+    | "call_completed"
+    | "call_report_sent"
+    | "simulation_recorded";
+  step?: "email" | "agent_call" | "human_call" | "resolved";
+  channel?: "email" | "call" | "voice_invite";
+  amount?: number;
+  currency?: string;
+  draftId?: string;
+  status?: "pending" | "completed" | "simulated";
 }
 
 export type FollowUpChannelType = "email" | "call";

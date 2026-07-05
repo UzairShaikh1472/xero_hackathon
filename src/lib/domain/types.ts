@@ -66,7 +66,10 @@ export type SyncStatus = {
   organizationName: string | null;
   currency: string;
   bankCash?: number;
+  bankCashSource?: "bank" | "derived";
+  bankCashNote?: string;
   lastMonthCashFlow?: number;
+  lastMonthCashFlowAvailable?: boolean;
 };
 
 export type PhaseOneSnapshot = {
@@ -132,6 +135,10 @@ export type LiquiditySnapshot = {
   daily: LiquidityDailyPoint[];
   projectedInflow: number;
   projectedOutflow: number;
+  lastMonthCashFlow: number;
+  lastMonthCashFlowAvailable: boolean;
+  currentCashSource: "bank" | "derived";
+  currentCashNote?: string;
 };
 
 export type RevenueOpportunity = {
@@ -354,6 +361,47 @@ export type ExecutionHistoryEntry = ExecutionResult & {
 export type ExecutionHistorySnapshot = {
   totalExecutions: number;
   items: ExecutionHistoryEntry[];
+};
+
+export type ActivityLogStep = "email" | "agent_call" | "human_call" | "resolved";
+
+export type ActivityLogEventType =
+  | "email_sent"
+  | "voice_invite_sent"
+  | "call_queued"
+  | "call_started"
+  | "call_turn"
+  | "call_completed"
+  | "call_report_sent"
+  | "simulation_recorded";
+
+export type ActivityLogActor = "system" | "agent" | "client";
+
+export type ActivityLogEntry = {
+  id: string;
+  at: string;
+  eventType: ActivityLogEventType;
+  actor: ActivityLogActor;
+  step: ActivityLogStep;
+  title: string;
+  detail?: string;
+  draftId?: string;
+  targetId?: string;
+  targetName?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  channel?: "email" | "call" | "voice_invite";
+  amount?: number;
+  currency?: string;
+  providerId?: string;
+  status?: "completed" | "pending" | "simulated";
+  transcript?: VoiceCallTurn[];
+  metadata?: Record<string, string | number | boolean | null>;
+};
+
+export type ActivityLogSnapshot = {
+  totalEvents: number;
+  items: ActivityLogEntry[];
 };
 
 export type FollowUpRecord = {

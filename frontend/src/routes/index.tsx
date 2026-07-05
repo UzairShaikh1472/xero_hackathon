@@ -4,7 +4,7 @@ import { ArrowRight, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { UpFlowLogo } from "@/components/control-room/upflow-logo";
+import { UpFlowBrand } from "@/components/control-room/upflow-logo";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
@@ -120,18 +120,8 @@ function LandingPage() {
       <header className="sticky top-0 z-10 border-b hairline bg-surface/55 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <div
-              className="relative grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-primary text-primary-foreground"
-              style={{ boxShadow: "var(--shadow-neon)" }}
-            >
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M7 19H14M10.5 19V11.5C10.5 8.5 12 7 14.5 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M6.5 13H18M18 13L14.75 9.75M18 13L14.75 16.25" stroke="var(--accent)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-white/12 via-transparent to-cyan-300/30" />
-            </div>
             <div className="min-w-0">
-              <div className="font-sans text-lg font-semibold">UpFlow</div>
+              <UpFlowBrand size={34} textClassName="text-lg" />
               <div className="truncate text-sm text-muted-foreground">
                 Your cash control room · <span className="text-foreground">Built on Xero</span>
               </div>
@@ -345,10 +335,7 @@ function LandingPage() {
       {/* Footer */}
       <footer className="border-t hairline px-6 py-6">
         <div className="mx-auto flex max-w-[1100px] items-center justify-between">
-          <div className="flex items-center gap-2">
-            <UpFlowLogo size={20} />
-            <span className="text-sm font-semibold">UpFlow</span>
-          </div>
+          <UpFlowBrand size={20} textClassName="text-sm" />
           <span className="text-sm text-muted-foreground">Built on Xero</span>
         </div>
       </footer>

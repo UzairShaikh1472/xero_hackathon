@@ -274,11 +274,36 @@ async function syncLiveSnapshot(
     throw new Error("No usable Xero access token");
   }
 
-  const [rawInvoices, rawContacts, bankCash, lastMonthCashFlow] = await Promise.all([
+  const [rawInvoices, rawContacts, bankCashResult, lastMonthCashFlowResult] = await Promise.all([
     getInvoices(accessToken, tenant.tenantId),
     getContacts(accessToken, tenant.tenantId),
-    getBankAccounts(accessToken, tenant.tenantId).catch((e) => { console.error("[bankCash error]", e?.message ?? e); return 0; }),
-    getLastMonthCashFlow(accessToken, tenant.tenantId).catch((e) => { console.error("[lastMonthCashFlow error]", e?.message ?? e); return 0; }),
+    getBankAccounts(accessToken, tenant.tenantId)
+      .then((amount) => ({
+        amount,
+        source: "bank" as const,
+        note: undefined,
+      }))
+      .catch((e) => {
+        console.error("[bankCash error]", e?.message ?? e);
+        return {
+          amount: 0,
+          source: "derived" as const,
+          note:
+            "Estimated from open Xero invoices because this connection is not exposing a live bank balance right now.",
+        };
+      }),
+    getLastMonthCashFlow(accessToken, tenant.tenantId)
+      .then((amount) => ({
+        amount,
+        available: true,
+      }))
+      .catch((e) => {
+        console.error("[lastMonthCashFlow error]", e?.message ?? e);
+        return {
+          amount: 0,
+          available: false,
+        };
+      }),
   ]);
 
   const lastSyncAt = new Date().toISOString();
@@ -296,8 +321,11 @@ async function syncLiveSnapshot(
       tenantId: tenant.tenantId,
       organizationName: tenant.tenantName,
       currency: getCurrencyFromInvoices(normalizedInvoices),
-      bankCash,
-      lastMonthCashFlow,
+      bankCash: bankCashResult.amount,
+      bankCashSource: bankCashResult.source,
+      bankCashNote: bankCashResult.note,
+      lastMonthCashFlow: lastMonthCashFlowResult.amount,
+      lastMonthCashFlowAvailable: lastMonthCashFlowResult.available,
     }
   };
 
@@ -319,7 +347,11 @@ function buildFallbackSnapshot(): PhaseOneSnapshot {
       lastSyncAt,
       tenantId: tenant?.tenantId ?? null,
       organizationName: fallback.company.name,
-      currency: fallback.company.currency
+      currency: fallback.company.currency,
+      bankCash: 48200,
+      bankCashSource: "bank",
+      lastMonthCashFlow: 12400,
+      lastMonthCashFlowAvailable: true,
     }
   };
 

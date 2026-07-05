@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Activity, AlertTriangle, ChevronRight, RefreshCw, Repeat } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -104,10 +105,12 @@ export function CashRevenueLens({
   data,
   onOpen,
   highlightCustomer,
+  focus,
 }: {
   data: ControlRoomData;
   onOpen: (d: NegotiationDraft) => void;
   highlightCustomer?: string;
+  focus?: string;
 }) {
   const [visibleCategories, setVisibleCategories] = useState<CashLensCategory[]>(DEFAULT_VISIBLE);
 
@@ -239,16 +242,25 @@ function RowShell({
         {amount != null && (
           <div className="numeric text-right shrink-0 space-y-0.5">{amount}</div>
         )}
-        <Button
-          size="sm"
-          variant={draft ? "default" : "outline"}
-          disabled={!draft}
-          onClick={() => draft && onOpen(draft)}
-          className={cn(!draft && "border-hairline")}
-        >
-          {draft ? "Review draft" : "No draft"}
-          <ChevronRight className="size-3.5" />
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant={draft ? "default" : "outline"}
+            disabled={!draft}
+            onClick={() => draft && onOpen(draft)}
+            className={cn(!draft && "border-hairline")}
+          >
+            {draft ? "Review draft" : "No draft"}
+            <ChevronRight className="size-3.5" />
+          </Button>
+          {draft && (
+            <Button size="sm" variant="outline" className="border-hairline" asChild>
+              <Link to="/app/actions" search={{ customer: name }}>
+                Action
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -273,6 +285,9 @@ function OverdueRow({
       draft={draft}
       onOpen={onOpen}
       highlighted={highlighted}
+      amount={
+        <div className="text-sm text-positive">+{gbp(invoice.expectedRecovery)} recoverable</div>
+      }
     />
   );
 }
@@ -318,6 +333,11 @@ function LapsedRow({
       draft={draft}
       onOpen={onOpen}
       highlighted={highlighted}
+      amount={
+        <div className="text-sm text-positive">
+          +{gbp(customer.recoveryPotential)} reactivation
+        </div>
+      }
     />
   );
 }

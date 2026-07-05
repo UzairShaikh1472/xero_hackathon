@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
+import { UpFlowBrand } from "@/components/control-room/upflow-logo";
 import { BrowserVoiceAgent } from "@/components/voice/browser-voice-agent";
 import { Button } from "@/components/ui/button";
 import { fetchVoiceSession } from "@/lib/kinetic/api";
@@ -23,7 +24,10 @@ function CallPage() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b hairline px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-xl items-center justify-between">
-          <span className="text-lg font-semibold">UpFlow Voice Agent</span>
+          <div className="flex items-center gap-3">
+            <UpFlowBrand size={28} textClassName="text-lg" />
+            <span className="text-sm text-muted-foreground">Voice Agent</span>
+          </div>
           <span className="text-sm text-muted-foreground">Browser call</span>
         </div>
       </header>

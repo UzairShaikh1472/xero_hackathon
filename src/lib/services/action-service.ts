@@ -31,6 +31,12 @@ import {
   storeDraft,
   storeExecution
 } from "../utils/idempotency.js";
+import { appendActivityLog } from "../utils/activity-log-store.js";
+import {
+  deriveDraftLogStep,
+  getDraftInvoiceId,
+  getDraftInvoiceNumber,
+} from "../utils/activity-log-helpers.js";
 import { logger } from "../utils/logger.js";
 import { getPhaseOneSnapshotData } from "./phase-one-sync-service.js";
 import { snapshotToNormalized } from "./snapshot-to-normalized.js";
@@ -809,6 +815,26 @@ export async function buildSimulationExecuteResponse(
     recordedAt: new Date().toISOString()
   };
   appendExecutionHistory(historyEntry);
+  appendActivityLog({
+    eventType: "simulation_recorded",
+    actor: "system",
+    step: deriveDraftLogStep(draft),
+    title: input.approved ? "Execution simulated" : "Execution rejected",
+    detail: result.auditLog.message,
+    draftId: draft.id,
+    targetId: draft.targetId,
+    targetName: draft.targetName,
+    invoiceId: getDraftInvoiceId(draft),
+    invoiceNumber: getDraftInvoiceNumber(draft),
+    amount: result.cashUnlocked.amount,
+    currency: result.cashUnlocked.currency,
+    status: input.approved ? "simulated" : "completed",
+    metadata: {
+      idempotencyKey,
+      actionType,
+      approved: input.approved,
+    },
+  });
   logger.info("simulate.execute.recorded", {
     executionId: result.executionId,
     actionId,

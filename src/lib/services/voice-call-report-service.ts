@@ -6,12 +6,14 @@ import { isEmailConfigured } from "../config/communications-config.js";
 import { env } from "../config/env.js";
 import type {
   ApiEnvelope,
+  ActivityLogEventType,
   VoiceCallCompleteRequest,
   VoiceCallCompleteResponse,
   VoiceCallTurn
 } from "../domain/types.js";
 import { HttpError } from "../utils/http-error.js";
 import { logger } from "../utils/logger.js";
+import { appendActivityLog } from "../utils/activity-log-store.js";
 import { getStoredDraft } from "../utils/idempotency.js";
 import { recordFollowUp } from "../utils/follow-up-store.js";
 import { getPhaseOneSnapshotData } from "./phase-one-sync-service.js";
@@ -268,6 +270,25 @@ export async function buildVoiceCallCompleteResponse(
       recipientEmail,
       messageId: info.messageId
     });
+    appendActivityLog({
+      eventType: "call_report_sent",
+      actor: "system",
+      step: "agent_call",
+      title: "Call report emailed",
+      detail: `Call summary sent to ${recipientEmail}`,
+      draftId: session.draftId,
+      targetId: session.draftId,
+      targetName: session.contactName,
+      invoiceNumber: session.invoiceNumber,
+      amount: session.amountDue,
+      currency: session.currency,
+      providerId: info.messageId,
+      status: "completed",
+      metadata: {
+        emailSent: true,
+        recipientEmail,
+      },
+    });
   } else {
     message = "Call summary generated. Configure SMTP to email reports automatically.";
     logger.info("voice.call_report.generated", {
@@ -278,6 +299,25 @@ export async function buildVoiceCallCompleteResponse(
   }
 
   trackCallFollowUp(session.draftId);
+  appendActivityLog({
+    eventType: "call_completed",
+    actor: "system",
+    step: "agent_call",
+    title: "Call transcript saved",
+    detail: summary,
+    draftId: session.draftId,
+    targetId: session.draftId,
+    targetName: session.contactName,
+    invoiceNumber: session.invoiceNumber,
+    amount: session.amountDue,
+    currency: session.currency,
+    status: "completed",
+    transcript,
+    metadata: {
+      emailSent,
+      reportRecipient: recipientEmail ?? null,
+    },
+  });
 
   return {
     ok: true,

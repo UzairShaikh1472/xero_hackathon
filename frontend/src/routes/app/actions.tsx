@@ -2,15 +2,22 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { ActionsActivityLogs } from "@/components/control-room/actions-activity-logs";
 import { ActionsFollowUp } from "@/components/control-room/actions-follow-up";
 import { TourAnchor, TOUR_STEPS } from "@/components/control-room/demo-tour";
 import { useControlRoom } from "@/components/control-room/control-room-context";
-import { buildEscalationTimeline } from "@/lib/kinetic/action-timeline";
+import {
+  filterActionableDrafts,
+  mergeAuditWithCommunications,
+} from "@/lib/kinetic/action-activity";
 import { controlRoomQuery, followUpsQuery, draftsQuery } from "@/lib/kinetic/queries";
 
 import { AppErrorState } from "@/components/control-room/app-error-state";
 
 export const Route = createFileRoute("/app/actions")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    customer: typeof search.customer === "string" ? search.customer : undefined,
+  }),
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(followUpsQuery);
     const controlRoom = queryClient.getQueryData(controlRoomQuery.queryKey);
@@ -26,7 +33,6 @@ function ActionsPage() {
     data,
     health,
     communications,
-    executions,
     isDraftsFetching,
     isDraftsError,
     draftsError,
@@ -37,18 +43,21 @@ function ActionsPage() {
     refetch,
   } = useControlRoom();
   const { data: followUps } = useQuery(followUpsQuery);
+  const { customer } = Route.useSearch();
   const activeAnchor = tourStep !== null ? TOUR_STEPS[tourStep].anchor : null;
+  const audit = useMemo(
+    () => mergeAuditWithCommunications(data.audit, communications),
+    [communications, data.audit],
+  );
 
-  const escalationSteps = useMemo(
+  const actionableDrafts = useMemo(
     () =>
-      buildEscalationTimeline({
+      filterActionableDrafts(data.drafts, {
         followUps,
         communications,
-        executions,
-        audit: data.audit,
-        drafts: data.drafts,
+        audit,
       }),
-    [followUps, communications, executions, data.audit, data.drafts],
+    [followUps, communications, audit, data.drafts],
   );
 
   if (isDraftsError && data.drafts.length === 0) {
@@ -71,26 +80,34 @@ function ActionsPage() {
         <p className="max-w-3xl text-sm text-muted-foreground">
           Choose how to follow up: email, AI voice, or human escalation.
         </p>
+        {customer && (
+          <p className="text-sm text-primary">Focused action: {customer}</p>
+        )}
         {isDraftsFetching && data.drafts.length === 0 && (
           <p className="text-sm text-muted-foreground">
             Loading follow-up drafts from Xero...
           </p>
         )}
-        {!isDraftsFetching && data.drafts.length === 0 && (
+        {!isDraftsFetching && actionableDrafts.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            No overdue receivables drafts right now. Check Cash Lens for at-risk invoices or refresh after syncing Xero.
+            No ready-to-send drafts right now. Anything already contacted will stay in the saved logs below.
           </p>
         )}
       </div>
 
       <ActionsFollowUp
-        drafts={data.drafts}
+        drafts={actionableDrafts}
         emailConfigured={health?.emailConfigured ?? false}
         browserVoiceConfigured={health?.browserVoiceConfigured ?? false}
+        highlightCustomer={customer}
         onSendEmail={handleSendEmail}
         onSendVoiceInvite={handleSendVoiceInvite}
         onStartCall={handleStartCall}
       />
+
+      <TourAnchor id="actions" active={activeAnchor === "actions"}>
+        <ActionsActivityLogs audit={audit} />
+      </TourAnchor>
     </div>
   );
 }

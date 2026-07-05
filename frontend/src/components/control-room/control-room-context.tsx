@@ -145,6 +145,8 @@ export function ControlRoomProvider({ children }: { children: ReactNode }) {
       { ...result, sentAt: new Date().toISOString() },
     ]);
     void queryClient.invalidateQueries({ queryKey: ["kinetic", "follow-ups"] });
+    void queryClient.invalidateQueries({ queryKey: ["kinetic", "control-room"] });
+    void queryClient.invalidateQueries({ queryKey: ["kinetic", "drafts"] });
   };
 
   const handleSimulate = async (draft: NegotiationDraft) => {

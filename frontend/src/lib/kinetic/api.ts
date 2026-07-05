@@ -76,6 +76,9 @@ type LiquidityData = {
   projectedInflow: number;
   projectedOutflow: number;
   lastMonthCashFlow?: number;
+  lastMonthCashFlowAvailable?: boolean;
+  currentCashSource?: "bank" | "derived";
+  currentCashNote?: string;
 };
 
 type AtRiskItem = {
@@ -126,6 +129,39 @@ type RevenueData = {
   totalOpportunities: number;
   estimatedRevenueUnlock: Money;
   items: RevenueItem[];
+};
+
+type ActivityLogItem = {
+  id: string;
+  at: string;
+  eventType:
+    | "email_sent"
+    | "voice_invite_sent"
+    | "call_queued"
+    | "call_started"
+    | "call_turn"
+    | "call_completed"
+    | "call_report_sent"
+    | "simulation_recorded";
+  actor: "system" | "agent" | "client";
+  step: "email" | "agent_call" | "human_call" | "resolved";
+  title: string;
+  detail?: string;
+  draftId?: string;
+  targetId?: string;
+  targetName?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  channel?: "email" | "call" | "voice_invite";
+  amount?: number;
+  currency?: string;
+  providerId?: string;
+  status?: "completed" | "pending" | "simulated";
+};
+
+type ActivityLogData = {
+  totalEvents: number;
+  items: ActivityLogItem[];
 };
 
 type BackendNegotiationDraft = {
@@ -434,6 +470,9 @@ type LegacyLiquidityData = {
 type NormalizedLiquidity = {
   cash: number;
   lastMonthCashFlow: number;
+  lastMonthCashFlowAvailable: boolean;
+  currentCashSource: "bank" | "derived";
+  currentCashNote?: string;
   dso: number;
   dpo: number;
   ccc: number;
@@ -454,6 +493,9 @@ function normalizeLiquidity(
     return {
       cash: data.snapshot.cash,
       lastMonthCashFlow: data.lastMonthCashFlow ?? 0,
+      lastMonthCashFlowAvailable: data.lastMonthCashFlowAvailable ?? false,
+      currentCashSource: data.currentCashSource ?? "derived",
+      currentCashNote: data.currentCashNote,
       dso: data.snapshot.dso,
       dpo: data.snapshot.dpo,
       ccc: data.snapshot.ccc,
@@ -470,6 +512,8 @@ function normalizeLiquidity(
     return {
       cash: data.currentCash?.amount ?? 0,
       lastMonthCashFlow: 0,
+      lastMonthCashFlowAvailable: false,
+      currentCashSource: "derived",
       dso: data.dso ?? 0,
       dpo: data.dpo ?? 0,
       ccc: data.ccc ?? 0,
@@ -497,19 +541,41 @@ function mapRepeatBuyers(items: RevenueItem[]): RepeatBuyer[] {
     }));
 }
 
+function mapActivityLogs(items: ActivityLogItem[]) {
+  return items.map((item) => ({
+    id: item.id,
+    at: item.at,
+    actor:
+      item.actor === "client"
+        ? "Client"
+        : item.actor === "agent"
+          ? "Voice agent"
+          : "UpFlow",
+    action: item.title,
+    target: item.targetName ?? item.invoiceNumber ?? "Activity",
+    rationale: item.detail ?? "",
+    humanInLoop: false,
+    kind: item.eventType,
+    step: item.step,
+    channel: item.channel,
+    amount: item.amount,
+    currency: item.currency,
+    draftId: item.draftId,
+    status: item.status ?? "completed",
+  }));
+}
+
 function toControlRoomData(
   summary: ApiEnvelope<SummaryData>,
   liquidity: ApiEnvelope<LiquidityData | LegacyLiquidityData>,
   atRisk: ApiEnvelope<AtRiskData>,
   revenue: ApiEnvelope<RevenueData>,
+  logs: ApiEnvelope<ActivityLogData>,
   drafts: NegotiationDraft[],
 ): ControlRoomData {
   const normalized = normalizeLiquidity(liquidity);
   const lapsedCustomers = mapLapsed(revenue.data.items);
-  const revenueOpportunityTotal = lapsedCustomers.reduce(
-    (sum, c) => sum + c.recoveryPotential,
-    0,
-  );
+  const revenueOpportunityTotal = revenue.data.estimatedRevenueUnlock.amount;
 
   return {
     snapshot: {
@@ -521,7 +587,10 @@ function toControlRoomData(
       mode: summary.mode,
       currency: "GBP",
       currentCash: normalized.cash,
+      currentCashSource: normalized.currentCashSource,
+      currentCashNote: normalized.currentCashNote,
       lastMonthCashFlow: normalized.lastMonthCashFlow,
+      lastMonthCashFlowAvailable: normalized.lastMonthCashFlowAvailable,
       overdueReceivables: summary.data.overdueReceivables.amount,
       statutoryInterestEstimate: summary.data.statutoryInterestEstimate?.amount,
       fixedCompensationEstimate: summary.data.fixedCompensationEstimate?.amount,
@@ -546,7 +615,7 @@ function toControlRoomData(
     lapsedCustomers,
     repeatBuyers: mapRepeatBuyers(revenue.data.items),
     drafts,
-    audit: [],
+    audit: mapActivityLogs(logs.data.items),
   };
 }
 
@@ -696,11 +765,12 @@ export async function fetchHealth(): Promise<HealthData> {
 }
 
 export async function fetchControlRoom(): Promise<ControlRoomData> {
-  const [summary, liquidity, atRisk, revenue] = await Promise.all([
+  const [summary, liquidity, atRisk, revenue, logs] = await Promise.all([
     fetchEnvelope<SummaryData>("/api/summary"),
     fetchEnvelope<LiquidityData | LegacyLiquidityData>("/api/liquidity"),
     fetchEnvelope<AtRiskData>("/api/invoices/at-risk"),
     fetchEnvelope<RevenueData>("/api/revenue-opportunities"),
+    fetchEnvelope<ActivityLogData>("/api/activity/logs"),
   ]);
 
   if (summary.mode === "fallback") {
@@ -711,10 +781,11 @@ export async function fetchControlRoom(): Promise<ControlRoomData> {
     { label: "/api/liquidity", envelope: liquidity },
     { label: "/api/invoices/at-risk", envelope: atRisk },
     { label: "/api/revenue-opportunities", envelope: revenue },
+    { label: "/api/activity/logs", envelope: logs },
   ]);
 
   // Drafts load in background via draftsQuery — do not block dashboard on LLM calls.
-  return toControlRoomData(summary, liquidity, atRisk, revenue, []);
+  return toControlRoomData(summary, liquidity, atRisk, revenue, logs, []);
 }
 
 export async function fetchReceivablesDraftsBatch(): Promise<NegotiationDraft[]> {

@@ -1,9 +1,53 @@
-export function UpFlowLogo({ size = 32 }: { size?: number }) {
+import { cn } from "@/lib/utils";
+
+export function UpFlowLogo({ size = 32, className }: { size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="16" cy="16" r="16" fill="#1a1a1a" />
-      <text x="7" y="22" fontSize="15" fontWeight="700" fill="#a3e635" fontFamily="Georgia, serif">£</text>
-      <path d="M21 15.5 L25.5 15.5 M23.2 13.2 L25.8 15.5 L23.2 17.8" stroke="#a3e635" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      <circle cx="16" cy="16" r="16" fill="#151515" />
+      <text
+        x="8"
+        y="21.5"
+        fontSize="14.5"
+        fontWeight="700"
+        fill="#b8ff36"
+        fontFamily="Inter, ui-sans-serif, system-ui, sans-serif"
+      >
+        {"\u00A3"}
+      </text>
+      <path
+        d="M21 16H25.6M23.25 13.75L25.9 16L23.25 18.25"
+        stroke="#b8ff36"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
+  );
+}
+
+export function UpFlowBrand({
+  size = 32,
+  textClassName,
+  className,
+}: {
+  size?: number;
+  textClassName?: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-center gap-3", className)}>
+      <UpFlowLogo size={size} />
+      <span className={cn("font-sans font-semibold tracking-tight text-foreground", textClassName)}>
+        UpFlow
+      </span>
+    </div>
   );
 }
