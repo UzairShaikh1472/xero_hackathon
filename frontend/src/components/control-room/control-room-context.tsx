@@ -56,6 +56,42 @@ type ControlRoomContextValue = {
 
 const ControlRoomContext = createContext<ControlRoomContextValue | null>(null);
 
+type SyncFingerprint = {
+  totalInvoices: number;
+  contactsCount: number;
+  currentCash: number;
+  recoverableCash: number;
+  revenueOpportunityTotal: number;
+};
+
+function snapshotFingerprint(data: ControlRoomData): SyncFingerprint {
+  return {
+    totalInvoices: data.snapshot.totalInvoices ?? 0,
+    contactsCount: data.snapshot.contactsCount ?? 0,
+    currentCash: data.snapshot.currentCash,
+    recoverableCash: data.snapshot.recoverableCash,
+    revenueOpportunityTotal: data.snapshot.revenueOpportunityTotal,
+  };
+}
+
+function fingerprintsEqual(a: SyncFingerprint, b: SyncFingerprint): boolean {
+  return (
+    a.totalInvoices === b.totalInvoices &&
+    a.contactsCount === b.contactsCount &&
+    a.currentCash === b.currentCash &&
+    a.recoverableCash === b.recoverableCash &&
+    a.revenueOpportunityTotal === b.revenueOpportunityTotal
+  );
+}
+
+function formatSyncMeta(result: {
+  organizationName: string;
+  invoicesCount: number;
+  contactsCount: number;
+}): string {
+  return `${result.organizationName} · ${result.invoicesCount} invoices · ${result.contactsCount} contacts`;
+}
+
 export function ControlRoomProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { data, isPending, isFetching, refetch } = useQuery(controlRoomQuery);
@@ -222,10 +258,25 @@ export function ControlRoomProvider({ children }: { children: ReactNode }) {
   const handleRefresh = async () => {
     if (mergedData.snapshot.mode === "live") {
       setIsSyncing(true);
+      const before = snapshotFingerprint(mergedData);
       try {
-        await syncXeroData();
+        const syncResult = await syncXeroData();
         await queryClient.invalidateQueries({ queryKey: ["kinetic"] });
-        toast.success("Xero data refreshed");
+        const { data: refreshedData } = await refetch();
+        const syncMeta = formatSyncMeta(syncResult);
+        const unchanged =
+          refreshedData != null &&
+          fingerprintsEqual(before, snapshotFingerprint(refreshedData));
+
+        if (unchanged) {
+          toast.success("Synced with Xero — no data changes detected", {
+            description: syncMeta,
+          });
+        } else {
+          toast.success("Xero data refreshed", {
+            description: syncMeta,
+          });
+        }
       } catch (err) {
         if (err instanceof ApiRequestError && err.status === 401) {
           toast.error("Reconnect Xero", {

@@ -49,6 +49,9 @@ type ApiEnvelope<T> = {
 type SummaryData = {
   organizationName: string;
   currency: string;
+  lastSyncAt?: string | null;
+  totalInvoices?: number;
+  contactsCount?: number;
   overdueReceivables: Money;
   statutoryInterestEstimate?: Money;
   fixedCompensationEstimate?: Money;
@@ -512,7 +515,9 @@ function toControlRoomData(
     snapshot: {
       orgName: summary.data.organizationName,
       connectedVia: "Xero",
-      lastSyncAt: summary.generatedAt,
+      lastSyncAt: summary.data.lastSyncAt ?? summary.generatedAt,
+      totalInvoices: summary.data.totalInvoices,
+      contactsCount: summary.data.contactsCount,
       mode: summary.mode,
       currency: "GBP",
       currentCash: normalized.cash,

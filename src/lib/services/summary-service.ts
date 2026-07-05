@@ -36,6 +36,7 @@ export async function buildSummaryResponse(): Promise<ApiEnvelope<CompanySnapsho
     data: {
       organizationName: snapshot.sync.organizationName ?? "Unknown Organization",
       currency,
+      lastSyncAt: snapshot.sync.lastSyncAt,
       totalInvoices: receivableInvoices.length,
       contactsCount: snapshot.contacts.length,
       totalOutstandingReceivables: {

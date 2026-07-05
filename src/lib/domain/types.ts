@@ -78,6 +78,7 @@ export type PhaseOneSnapshot = {
 export type CompanySnapshot = {
   organizationName: string;
   currency: string;
+  lastSyncAt: string | null;
   totalInvoices: number;
   contactsCount: number;
   totalOutstandingReceivables: Money;

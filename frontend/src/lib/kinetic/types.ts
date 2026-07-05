@@ -7,6 +7,8 @@ export interface CompanySnapshot {
   orgName: string;
   connectedVia: "Xero";
   lastSyncAt: string; // ISO
+  totalInvoices?: number;
+  contactsCount?: number;
   mode: "live" | "fallback";
   currency: Currency;
   currentCash: number;
