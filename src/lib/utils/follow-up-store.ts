@@ -1,10 +1,10 @@
 import fs from "node:fs";
-import path from "node:path";
 
 import type { FollowUpRecord } from "../domain/types.js";
+import { getDataDir, getDataFilePath } from "./data-dir.js";
 
-const dataDir = path.resolve(process.cwd(), ".data");
-const followUpFilePath = path.join(dataDir, "follow-up-records.json");
+const dataDir = getDataDir();
+const followUpFilePath = getDataFilePath("follow-up-records.json");
 
 function loadFollowUpRecords(): FollowUpRecord[] {
   try {

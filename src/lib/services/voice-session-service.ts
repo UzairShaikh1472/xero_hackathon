@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { env } from "../config/env.js";
+import { getDataFilePath } from "../utils/data-dir.js";
 import { buildVoiceCollectionSystemPrompt } from "../../agents/voiceCollectionPrompt.js";
 import { buildVoiceReengagementSystemPrompt } from "../../agents/voiceReengagementPrompt.js";
 import type { NegotiationDraft, VoiceSessionContext } from "../domain/types.js";
@@ -30,7 +31,7 @@ type StoredVoiceSession = {
   expiresAt: number;
 };
 
-const sessionFilePath = path.resolve(process.cwd(), ".data", "voice-sessions.json");
+const sessionFilePath = getDataFilePath("voice-sessions.json");
 
 const sessions = new Map<string, StoredVoiceSession>();
 

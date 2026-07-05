@@ -1,10 +1,10 @@
 import fs from "node:fs";
-import path from "node:path";
 
 import type { ActivityLogEntry } from "../domain/types.js";
+import { getDataDir, getDataFilePath } from "./data-dir.js";
 
-const dataDir = path.resolve(process.cwd(), ".data");
-const activityLogFilePath = path.join(dataDir, "activity-log-records.json");
+const dataDir = getDataDir();
+const activityLogFilePath = getDataFilePath("activity-log-records.json");
 
 function loadActivityLogs(): ActivityLogEntry[] {
   try {

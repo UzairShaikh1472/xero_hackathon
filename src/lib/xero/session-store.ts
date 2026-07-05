@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { getDataFilePath } from "../utils/data-dir.js";
+
 export type XeroTokenSet = {
   accessToken: string;
   refreshToken?: string;
@@ -22,7 +24,7 @@ type XeroSession = {
   lastSyncAt: string | null;
 };
 
-const sessionFilePath = path.resolve(process.cwd(), ".data", "xero-session.json");
+const sessionFilePath = getDataFilePath("xero-session.json");
 
 function loadSession(): XeroSession {
   try {
