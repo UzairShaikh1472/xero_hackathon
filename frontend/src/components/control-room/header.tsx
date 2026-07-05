@@ -120,15 +120,6 @@ export function Header({
             <span className="sr-only sm:not-sr-only">Refresh</span>
           </Button>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onReset}
-            className="text-muted-foreground"
-          >
-            <RefreshCw className="size-3.5" />
-            <span className="sr-only sm:not-sr-only">Reset</span>
-          </Button>
         </div>
       </div>
     </header>

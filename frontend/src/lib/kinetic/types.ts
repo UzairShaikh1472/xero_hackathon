@@ -10,6 +10,7 @@ export interface CompanySnapshot {
   mode: "live" | "fallback";
   currency: Currency;
   currentCash: number;
+  lastMonthCashFlow: number;
   overdueReceivables: number;
   statutoryInterestEstimate?: number;
   fixedCompensationEstimate?: number;

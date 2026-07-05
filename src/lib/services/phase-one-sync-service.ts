@@ -6,7 +6,7 @@ import type { ApiEnvelope, PhaseOneSnapshot } from "../domain/types.js";
 import { HttpError } from "../utils/http-error.js";
 import { logger } from "../utils/logger.js";
 import { exchangeCodeForToken, fetchConnections, refreshAccessToken } from "../xero/api.js";
-import { getContacts, getInvoices } from "../xero/fetchers.js";
+import { getBankAccounts, getLastMonthCashFlow, getContacts, getInvoices } from "../xero/fetchers.js";
 import {
   getLastSyncAt,
   getTenant,
@@ -211,9 +211,11 @@ async function syncLiveSnapshot(
     throw new Error("No usable Xero access token");
   }
 
-  const [rawInvoices, rawContacts] = await Promise.all([
+  const [rawInvoices, rawContacts, bankCash, lastMonthCashFlow] = await Promise.all([
     getInvoices(accessToken, tenant.tenantId),
-    getContacts(accessToken, tenant.tenantId)
+    getContacts(accessToken, tenant.tenantId),
+    getBankAccounts(accessToken, tenant.tenantId).catch((e) => { console.error("[bankCash error]", e?.message ?? e); return 0; }),
+    getLastMonthCashFlow(accessToken, tenant.tenantId).catch((e) => { console.error("[lastMonthCashFlow error]", e?.message ?? e); return 0; }),
   ]);
 
   const lastSyncAt = new Date().toISOString();
@@ -230,7 +232,9 @@ async function syncLiveSnapshot(
       lastSyncAt,
       tenantId: tenant.tenantId,
       organizationName: tenant.tenantName,
-      currency: getCurrencyFromInvoices(normalizedInvoices)
+      currency: getCurrencyFromInvoices(normalizedInvoices),
+      bankCash,
+      lastMonthCashFlow,
     }
   };
 

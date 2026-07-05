@@ -97,7 +97,8 @@ export async function fetchAccountingResource<T>(
   });
 
   if (!response.ok) {
-    throw new HttpError(response.status, `Failed to fetch Xero resource ${path}`);
+    const body = await response.text().catch(() => "");
+    throw new HttpError(response.status, `Failed to fetch Xero resource ${path} [${response.status}]: ${body.slice(0, 200)}`);
   }
 
   return (await response.json()) as T;

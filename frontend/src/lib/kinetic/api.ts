@@ -53,6 +53,7 @@ type LiquidityData = {
   daily: Array<{ day: number; inflow: number; outflow: number; balance: number }>;
   projectedInflow: number;
   projectedOutflow: number;
+  lastMonthCashFlow?: number;
 };
 
 type AtRiskItem = {
@@ -402,6 +403,7 @@ type LegacyLiquidityData = {
 
 type NormalizedLiquidity = {
   cash: number;
+  lastMonthCashFlow: number;
   dso: number;
   dpo: number;
   ccc: number;
@@ -421,6 +423,7 @@ function normalizeLiquidity(
   if (hasSnapshot) {
     return {
       cash: data.snapshot.cash,
+      lastMonthCashFlow: data.lastMonthCashFlow ?? 0,
       dso: data.snapshot.dso,
       dpo: data.snapshot.dpo,
       ccc: data.snapshot.ccc,
@@ -436,6 +439,7 @@ function normalizeLiquidity(
     const outflow = data.payablesDue30d?.amount ?? 0;
     return {
       cash: data.currentCash?.amount ?? 0,
+      lastMonthCashFlow: 0,
       dso: data.dso ?? 0,
       dpo: data.dpo ?? 0,
       ccc: data.ccc ?? 0,
@@ -485,6 +489,7 @@ function toControlRoomData(
       mode: summary.mode,
       currency: "GBP",
       currentCash: normalized.cash,
+      lastMonthCashFlow: normalized.lastMonthCashFlow,
       overdueReceivables: summary.data.overdueReceivables.amount,
       statutoryInterestEstimate: summary.data.statutoryInterestEstimate?.amount,
       fixedCompensationEstimate: summary.data.fixedCompensationEstimate?.amount,

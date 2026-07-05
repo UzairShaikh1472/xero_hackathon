@@ -70,7 +70,8 @@ export async function buildLiquidityResponse(): Promise<ApiEnvelope<LiquiditySna
       atRiskInvoices,
       daily: projection.daily,
       projectedInflow: projection.projectedInflow,
-      projectedOutflow: projection.projectedOutflow
+      projectedOutflow: projection.projectedOutflow,
+      lastMonthCashFlow: phaseOne.sync.lastMonthCashFlow ?? 0,
     }
   };
 }

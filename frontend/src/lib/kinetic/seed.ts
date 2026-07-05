@@ -99,6 +99,7 @@ export const seedData: ControlRoomData = {
     mode: "fallback",
     currency: "GBP",
     currentCash: 48200,
+    lastMonthCashFlow: 12400,
     overdueReceivables: 62480,
     recoverableCash,
     revenueOpportunityTotal: 12800 + 9400 + 7200,

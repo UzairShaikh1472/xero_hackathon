@@ -3,7 +3,6 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ActionsFollowUp } from "@/components/control-room/actions-follow-up";
-import { ActionsTimeline } from "@/components/control-room/actions-timeline";
 import { TourAnchor, TOUR_STEPS } from "@/components/control-room/demo-tour";
 import { useControlRoom } from "@/components/control-room/control-room-context";
 import { buildEscalationTimeline } from "@/lib/kinetic/action-timeline";
@@ -83,10 +82,6 @@ function ActionsPage() {
           </p>
         )}
       </div>
-
-      <TourAnchor id="actions" active={activeAnchor === "actions"}>
-        <ActionsTimeline steps={escalationSteps} />
-      </TourAnchor>
 
       <ActionsFollowUp
         drafts={data.drafts}

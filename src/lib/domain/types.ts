@@ -62,6 +62,8 @@ export type SyncStatus = {
   tenantId: string | null;
   organizationName: string | null;
   currency: string;
+  bankCash?: number;
+  lastMonthCashFlow?: number;
 };
 
 export type PhaseOneSnapshot = {

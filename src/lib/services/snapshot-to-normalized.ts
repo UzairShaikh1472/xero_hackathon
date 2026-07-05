@@ -52,8 +52,11 @@ export function snapshotToNormalized(snapshot: PhaseOneSnapshot): NormalizedData
     .reduce((sum, invoice) => sum + invoice.amount, 0);
 
   return {
-    // Phase-one sync does not include bank-feed cash yet.
-    cash: snapshot.sync.source === "fallback" ? 48200 : 0,
+    cash: snapshot.sync.source === "fallback"
+      ? 48200
+      : (snapshot.sync.bankCash ?? 0) > 0
+        ? snapshot.sync.bankCash!
+        : Math.max(0, receivableTotals - payableTotals),
     asOfDate,
     invoices,
     contacts,
