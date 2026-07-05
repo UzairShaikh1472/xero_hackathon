@@ -46,9 +46,11 @@ export type HealthStatus = {
   service: "xero-kinetic-backend";
   xeroConfigured: boolean;
   xeroConnected: boolean;
+  pendingOrgSelection: boolean;
   authReady: boolean;
   fallbackEnabled: boolean;
   lastSyncAt: string | null;
+  organizationName: string | null;
   emailConfigured: boolean;
   voiceConfigured: boolean;
   browserVoiceConfigured: boolean;

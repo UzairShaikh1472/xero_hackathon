@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowRight, CheckCircle } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 
+import { AuthCard } from "@/components/auth/auth-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -148,23 +149,24 @@ function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="px-6 pt-20 pb-8 text-center">
-        <div className="mx-auto max-w-[640px] space-y-5">
-          <div className="inline-flex items-center gap-2 rounded-full border hairline bg-surface px-3.5 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
-            <span className="inline-block size-1.5 rounded-full bg-accent" />
-            Built on Xero
+      <section className="px-6 pt-20 pb-8">
+        <div className="mx-auto grid max-w-[1100px] grid-cols-1 items-center gap-12 lg:grid-cols-2">
+          <div className="space-y-5 text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 rounded-full border hairline bg-surface px-3.5 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
+              <span className="inline-block size-1.5 rounded-full bg-accent" />
+              Built on Xero
+            </div>
+            <h1 className="text-5xl font-semibold tracking-tight leading-[1.1] text-foreground">
+              Your cash picture,<br />ready to act on.
+            </h1>
+            <p className="mx-auto max-w-md text-lg text-muted-foreground lg:mx-0">
+              Connect Xero. See which invoices are worth chasing and which customers are worth nurturing. Send AI-drafted follow-ups in one click.
+            </p>
           </div>
-          <h1 className="text-5xl font-semibold tracking-tight leading-[1.1] text-foreground">
-            Your cash picture,<br />ready to act on.
-          </h1>
-          <p className="mx-auto max-w-md text-lg text-muted-foreground">
-            Connect Xero. See which invoices are worth chasing and which customers are worth nurturing. Send AI-drafted follow-ups in one click.
-          </p>
-          <Link to="/login">
-            <Button size="lg" className="gap-2 shadow-[var(--shadow-neon)]">
-              Get started <ArrowRight className="size-4" />
-            </Button>
-          </Link>
+
+          <div className="mx-auto w-full max-w-[400px] lg:mx-0 lg:max-w-none">
+            <AuthCard />
+          </div>
         </div>
       </section>
 

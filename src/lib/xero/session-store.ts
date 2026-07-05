@@ -18,6 +18,7 @@ export type XeroTenant = {
 type XeroSession = {
   tokenSet: XeroTokenSet | null;
   tenant: XeroTenant | null;
+  availableTenants: XeroTenant[];
   lastSyncAt: string | null;
 };
 
@@ -29,16 +30,24 @@ function loadSession(): XeroSession {
       return {
         tokenSet: null,
         tenant: null,
+        availableTenants: [],
         lastSyncAt: null
       };
     }
 
     const payload = fs.readFileSync(sessionFilePath, "utf8");
-    return JSON.parse(payload) as XeroSession;
+    const parsed = JSON.parse(payload) as Partial<XeroSession>;
+    return {
+      tokenSet: parsed.tokenSet ?? null,
+      tenant: parsed.tenant ?? null,
+      availableTenants: parsed.availableTenants ?? [],
+      lastSyncAt: parsed.lastSyncAt ?? null
+    };
   } catch {
     return {
       tokenSet: null,
       tenant: null,
+      availableTenants: [],
       lastSyncAt: null
     };
   }
@@ -63,8 +72,18 @@ export function getTokenSet() {
 export function clearTokenSet() {
   session.tokenSet = null;
   session.tenant = null;
+  session.availableTenants = [];
   session.lastSyncAt = null;
   persistSession();
+}
+
+export function setAvailableTenants(tenants: XeroTenant[]) {
+  session.availableTenants = tenants;
+  persistSession();
+}
+
+export function getAvailableTenants() {
+  return session.availableTenants;
 }
 
 export function setTenant(tenant: XeroTenant | null) {

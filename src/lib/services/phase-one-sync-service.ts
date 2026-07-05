@@ -11,6 +11,7 @@ import {
   getLastSyncAt,
   getTenant,
   getTokenSet,
+  setAvailableTenants,
   setLastSyncAt,
   setTenant,
   setTokenSet
@@ -127,18 +128,66 @@ export async function handleOAuthCallback(code: string) {
   setTokenSet(tokenSet);
 
   const tenants = await fetchConnections(tokenSet.accessToken);
-  const tenant = tenants[0] ?? null;
-  setTenant(tenant);
+  setAvailableTenants(tenants);
 
-  logger.info("xero.auth.connected", {
-    tenantId: tenant?.tenantId ?? null,
-    tenantName: tenant?.tenantName ?? null
+  if (tenants.length === 0) {
+    logger.warn("xero.auth.no_organizations");
+    return {
+      connected: false,
+      needsOrgSelection: false,
+      tenant: null
+    };
+  }
+
+  if (tenants.length === 1) {
+    const tenant = tenants[0]!;
+    setTenant(tenant);
+    logger.info("xero.auth.connected", {
+      tenantId: tenant.tenantId,
+      tenantName: tenant.tenantName
+    });
+    return {
+      connected: true,
+      needsOrgSelection: false,
+      tenant
+    };
+  }
+
+  setTenant(null);
+  logger.info("xero.auth.org_selection_required", {
+    organizationCount: tenants.length
   });
 
   return {
-    connected: Boolean(tenant),
-    tenant
+    connected: false,
+    needsOrgSelection: true,
+    tenant: null
   };
+}
+
+export async function selectOrganization(tenantId: string) {
+  const tokenSet = getTokenSet();
+  if (!tokenSet) {
+    throw new HttpError(401, "Not authenticated with Xero");
+  }
+
+  const tenants = await fetchConnections(tokenSet.accessToken);
+  setAvailableTenants(tenants);
+
+  const tenant = tenants.find((item) => item.tenantId === tenantId);
+  if (!tenant) {
+    throw new HttpError(404, "Organization not found or no longer accessible");
+  }
+
+  setTenant(tenant);
+  clearSnapshotCache();
+
+  logger.info("xero.auth.organization_selected", {
+    tenantId: tenant.tenantId,
+    tenantName: tenant.tenantName
+  });
+
+  return tenant;
 }
 
 export async function getPhaseOneSnapshot() {

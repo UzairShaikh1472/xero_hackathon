@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { BACKEND_UNREACHABLE_MESSAGE, isBackendUnreachableError } from "@/lib/kinetic/api";
 
 function NotFoundComponent() {
   return (
@@ -38,6 +39,7 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const backendDown = isBackendUnreachableError(error);
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
@@ -46,11 +48,18 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+          {backendDown ? "Backend not reachable" : "This page didn't load"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          {backendDown
+            ? BACKEND_UNREACHABLE_MESSAGE
+            : error.message || "Something went wrong on our end. You can try refreshing or head back home."}
         </p>
+        {backendDown ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Run <code className="rounded bg-muted px-1 py-0.5">npm run dev</code> from the project root, then try again.
+          </p>
+        ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {

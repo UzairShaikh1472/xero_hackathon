@@ -22,7 +22,7 @@ import { buildHealthResponse } from "../lib/services/health-service.js";
 import { buildInvoiceRiskResponse } from "../lib/services/invoice-risk-service.js";
 import { buildLiquidityResponse } from "../lib/services/liquidity-service.js";
 import { buildOpenPayablesResponse } from "../lib/services/payables-service.js";
-import { clearSnapshotCache, getPhaseOneSnapshot, getPhaseOneSnapshotData, handleOAuthCallback } from "../lib/services/phase-one-sync-service.js";
+import { clearSnapshotCache, getPhaseOneSnapshot, getPhaseOneSnapshotData, handleOAuthCallback, selectOrganization } from "../lib/services/phase-one-sync-service.js";
 import { buildVoiceChatResponse } from "../lib/services/voice-chat-service.js";
 import { buildVoiceCallCompleteResponse } from "../lib/services/voice-call-report-service.js";
 import { buildVoiceTtsResponse } from "../lib/services/elevenlabs-tts-service.js";
@@ -32,7 +32,7 @@ import { buildSummaryResponse } from "../lib/services/summary-service.js";
 import { getBackendMode } from "../lib/config/runtime-mode.js";
 import { isXeroConfigured } from "../lib/config/xero-config.js";
 import { buildAuthUrl } from "../lib/xero/auth.js";
-import { clearTokenSet } from "../lib/xero/session-store.js";
+import { clearTokenSet, getAvailableTenants, getTenant, getTokenSet } from "../lib/xero/session-store.js";
 import { HttpError } from "../lib/utils/http-error.js";
 import { isValidOAuthState } from "../lib/xero/state.js";
 
@@ -142,10 +142,68 @@ apiRouter.get("/xero/callback", async (request, response, next) => {
       throw new HttpError(400, "Invalid Xero OAuth state");
     }
 
-    await handleOAuthCallback(code);
+    const result = await handleOAuthCallback(code);
     clearSnapshotCache();
 
-    response.redirect(`${env.FRONTEND_APP_URL.replace(/\/$/, "")}/?xero=connected`);
+    const frontendBase = env.FRONTEND_APP_URL.replace(/\/$/, "");
+    if (result.needsOrgSelection) {
+      return response.redirect(`${frontendBase}/xero/organizations?xero=authorized`);
+    }
+
+    if (!result.connected) {
+      return response.redirect(`${frontendBase}/login?xero=error&message=no_organizations`);
+    }
+
+    response.redirect(`${frontendBase}/app?xero=connected`);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.get("/xero/organizations", (_request, response) => {
+  const tokenSet = getTokenSet();
+  if (!tokenSet) {
+    return response.status(401).json({
+      ok: false,
+      mode: getBackendMode(),
+      generatedAt: new Date().toISOString(),
+      data: { message: "Not authenticated with Xero" }
+    });
+  }
+
+  const organizations = getAvailableTenants();
+  const selected = getTenant();
+
+  response.json({
+    ok: true,
+    mode: getBackendMode(),
+    generatedAt: new Date().toISOString(),
+    data: {
+      organizations,
+      selectedTenantId: selected?.tenantId ?? null,
+      needsSelection: Boolean(tokenSet && !selected && organizations.length > 0)
+    }
+  });
+});
+
+apiRouter.post("/xero/select-organization", async (request, response, next) => {
+  try {
+    const tenantId = String(request.body?.tenantId ?? "").trim();
+    if (!tenantId) {
+      throw new HttpError(400, "tenantId is required");
+    }
+
+    const tenant = await selectOrganization(tenantId);
+    response.json({
+      ok: true,
+      mode: getBackendMode(),
+      generatedAt: new Date().toISOString(),
+      data: {
+        tenantId: tenant.tenantId,
+        tenantName: tenant.tenantName,
+        connected: true
+      }
+    });
   } catch (error) {
     next(error);
   }
