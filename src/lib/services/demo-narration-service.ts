@@ -18,7 +18,8 @@ export async function buildDemoNarrationResponse(
     throw new HttpError(400, "Missing demo narration text");
   }
 
-  const preferredVoiceId = env.ELEVENLABS_DEMO_VOICE_ID.trim() || undefined;
+  const preferredVoiceId =
+    env.ELEVENLABS_VOICE_ID.trim() || env.ELEVENLABS_DEMO_VOICE_ID.trim() || undefined;
   const audioUrl = await buildElevenLabsAudioUrl(text, preferredVoiceId);
 
   return {

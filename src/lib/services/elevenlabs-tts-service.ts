@@ -17,7 +17,7 @@ async function synthesizeVoice(voiceId: string, text: string) {
     },
     body: JSON.stringify({
       text,
-      model_id: env.ELEVENLABS_MODEL || "eleven_flash_v2_5",
+      model_id: env.ELEVENLABS_MODEL || env.ELEVENLABS_MODEL_ID || "eleven_flash_v2_5",
       voice_settings: {
         stability: 0.5,
         similarity_boost: 0.8,
@@ -28,6 +28,8 @@ async function synthesizeVoice(voiceId: string, text: string) {
   });
 
   if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    console.warn("[ElevenLabs] TTS failed", { voiceId, status: response.status, detail: detail.slice(0, 200) });
     return undefined;
   }
 
@@ -43,8 +45,8 @@ export async function buildElevenLabsAudioUrl(text: string, preferredVoiceId?: s
 
   const candidates = [
     preferredVoiceId?.trim(),
-    env.ELEVENLABS_DEMO_VOICE_ID.trim(),
-    env.ELEVENLABS_VOICE_ID.trim()
+    env.ELEVENLABS_VOICE_ID.trim(),
+    env.ELEVENLABS_DEMO_VOICE_ID.trim()
   ].filter((voiceId, index, values): voiceId is string => Boolean(voiceId) && values.indexOf(voiceId) === index);
 
   for (const voiceId of candidates) {

@@ -3,6 +3,7 @@ import { Loader2, Mic, MicOff, PhoneOff, Send, Volume2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { CallSummaryContent } from "@/components/voice/call-summary-content";
 import { completeVoiceCall, sendVoiceChat, type VoiceSessionData } from "@/lib/kinetic/api";
 import { gbp } from "@/lib/kinetic/format";
 
@@ -397,7 +398,7 @@ export function BrowserVoiceAgent({ session }: { session: VoiceSessionData }) {
           <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
             Call summary
           </div>
-          <p className="whitespace-pre-wrap text-sm">{callSummary}</p>
+          <CallSummaryContent summary={callSummary} />
           {reportMessage && (
             <p className="mt-3 text-xs text-muted-foreground">{reportMessage}</p>
           )}
