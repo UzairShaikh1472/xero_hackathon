@@ -112,13 +112,13 @@ Days overdue: ${params.daysOverdue}
 Transcript:
 ${formatTranscriptForPrompt(params.contactName, params.transcript)}
 
-Include:
-- Outcome / next step
-- Any promised payment date
-- Blockers or disputes mentioned
-- Recommended follow-up action
+Start with one short intro sentence, then provide 3-5 markdown bullet points using this format:
+- **Outcome / next step:** ...
+- **Promised payment date:** ...
+- **Blockers or disputes:** ...
+- **Recommended follow-up action:** ...
 
-Keep it to 3-5 bullet points.`;
+Use plain English. Do not use HTML.`;
 
   try {
     return await getGeminiSummary(prompt);

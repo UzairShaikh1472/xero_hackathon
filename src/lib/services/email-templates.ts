@@ -1,3 +1,5 @@
+import { markdownToHtml } from "../utils/markdown.js";
+
 export interface PaymentReminderParams {
   contactName: string;
   organizationName: string;
@@ -344,7 +346,7 @@ export function buildCallReportHtml(params: {
   transcript: Array<{ role: "user" | "assistant"; content: string }>;
 }) {
   const amountLabel = formatMoney(params.amountDue, params.currency);
-  const summaryHtml = escapeHtml(params.summary).replace(/\n/g, "<br />");
+  const summaryHtml = markdownToHtml(params.summary);
   const transcriptHtml = params.transcript
     .map((turn) => {
       const speaker = turn.role === "user" ? params.contactName : "Agent";
@@ -358,7 +360,7 @@ export function buildCallReportHtml(params: {
   <h1 style="font-size: 20px; margin: 0 0 8px;">Collections call summary</h1>
   <p style="margin: 0 0 20px; color: #555;">${escapeHtml(params.contactName)} · Invoice #${escapeHtml(params.invoiceNumber)} · ${amountLabel} · ${params.daysOverdue} day${params.daysOverdue === 1 ? "" : "s"} overdue</p>
   <h2 style="font-size: 16px; margin: 24px 0 8px;">Summary</h2>
-  <p style="margin: 0 0 24px;">${summaryHtml}</p>
+  <div style="margin: 0 0 24px;">${summaryHtml}</div>
   <h2 style="font-size: 16px; margin: 24px 0 8px;">Full transcript</h2>
   <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; background: #f9fafb;">
     ${transcriptHtml}

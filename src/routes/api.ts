@@ -25,6 +25,7 @@ import { buildOpenPayablesResponse } from "../lib/services/payables-service.js";
 import { clearSnapshotCache, getPhaseOneSnapshot, getPhaseOneSnapshotData, handleOAuthCallback } from "../lib/services/phase-one-sync-service.js";
 import { buildVoiceChatResponse } from "../lib/services/voice-chat-service.js";
 import { buildVoiceCallCompleteResponse } from "../lib/services/voice-call-report-service.js";
+import { buildVoiceTtsResponse } from "../lib/services/elevenlabs-tts-service.js";
 import { buildVoiceSessionContext } from "../lib/services/voice-session-service.js";
 import { buildRevenueOpportunitiesResponse } from "../lib/services/revenue-opportunities-service.js";
 import { buildSummaryResponse } from "../lib/services/summary-service.js";
@@ -280,6 +281,15 @@ apiRouter.post("/voice/chat", async (request, response, next) => {
 apiRouter.post("/demo/narration", async (request, response, next) => {
   try {
     const payload = await buildDemoNarrationResponse(request.body);
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.post("/voice/tts", async (request, response, next) => {
+  try {
+    const payload = await buildVoiceTtsResponse(request.body ?? {});
     response.json(payload);
   } catch (error) {
     next(error);

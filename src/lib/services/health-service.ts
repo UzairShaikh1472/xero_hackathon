@@ -6,6 +6,7 @@ import {
 } from "../config/communications-config.js";
 import { env } from "../config/env.js";
 import { getActualBackendMode, isXeroConfigured } from "../config/xero-config.js";
+import { isElevenLabsConfigured } from "./elevenlabs-tts-service.js";
 import { getLastSyncAt, getTenant, getTokenSet } from "../xero/session-store.js";
 
 export async function buildHealthResponse(): Promise<ApiEnvelope<HealthStatus>> {
@@ -26,7 +27,8 @@ export async function buildHealthResponse(): Promise<ApiEnvelope<HealthStatus>> 
       lastSyncAt: getLastSyncAt(),
       emailConfigured: isEmailConfigured(),
       voiceConfigured: isVoiceConfigured(),
-      browserVoiceConfigured: isBrowserVoiceConfigured()
+      browserVoiceConfigured: isBrowserVoiceConfigured(),
+      elevenLabsConfigured: isElevenLabsConfigured()
     }
   };
 }
