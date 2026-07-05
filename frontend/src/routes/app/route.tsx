@@ -6,10 +6,7 @@ import {
   ControlRoomProvider,
   useControlRoom,
 } from "@/components/control-room/control-room-context";
-import {
-  DemoTour,
-  TOUR_STEPS,
-} from "@/components/control-room/demo-tour";
+import { DemoTour, TOUR_STEPS } from "@/components/control-room/demo-tour";
 import { Header } from "@/components/control-room/header";
 import { controlRoomQuery, draftsQuery, healthQuery } from "@/lib/kinetic/queries";
 
@@ -61,6 +58,10 @@ function AppShell() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <div
+        className="pointer-events-none fixed inset-0 -z-10"
+        style={{ background: "var(--gradient-glow)" }}
+      />
       <Header
         orgName={data.snapshot.orgName}
         mode={data.snapshot.mode}
@@ -78,7 +79,7 @@ function AppShell() {
       <main className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6">
         <Outlet />
         <footer className="pb-10 pt-8 text-center text-xs text-muted-foreground">
-          UpFlow · deterministic financial logic + agentic recommendations ·{" "}
+          UpFlow | deterministic financial logic + agentic recommendations |{" "}
           {data.snapshot.mode === "live" ? "live Xero data" : "fallback dataset"}
         </footer>
       </main>
@@ -122,3 +123,4 @@ function AppShell() {
 
 export { AppLoadingState } from "@/components/control-room/app-loading-state";
 export { AppErrorState } from "@/components/control-room/app-error-state";
+

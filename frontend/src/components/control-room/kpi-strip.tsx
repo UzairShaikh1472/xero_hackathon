@@ -91,7 +91,7 @@ function KpiCard({
   return (
     <div
       className={cn(
-        "panel flex-1 min-w-0 p-5",
+        "panel flex-1 min-w-0 p-5 transition-all duration-200 hover:-translate-y-0.5",
         highlight && "border-2 border-accent bg-accent/[0.04]",
       )}
     >

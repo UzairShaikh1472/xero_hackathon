@@ -88,6 +88,8 @@ export function ApprovalDrawer({
   const canVoice =
     (draft.agent === "receivables" && daysOverdue >= 14) ||
     (draft.agent === "reengagement" && reactivationUsesVoice(daysSilent));
+  const latePaymentEstimate =
+    draft.agent === "receivables" ? draft.latePaymentEstimate : undefined;
 
   const handleSendEmail = async () => {
     setSending(true);
@@ -136,7 +138,7 @@ export function ApprovalDrawer({
                 : draft.agent === "reengagement"
                   ? "Reactivate"
                   : "Extend"}{" "}
-              · {draft.targetName}
+              | {draft.targetName}
             </SheetTitle>
               <SheetDescription className="text-muted-foreground">
                 {draft.proposedAction}
@@ -150,6 +152,23 @@ export function ApprovalDrawer({
                   <StatBlock label="Impact ETA" value={`~${draft.hoursToImpact}h`} />
                   <StatBlock label="Confidence" value={pct(draft.confidence)} />
                 </div>
+
+                {latePaymentEstimate && (
+                  <div className="rounded-2xl border hairline bg-surface-2/55 p-4">
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                      UK late-payment estimate
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <StatBlock label="Original amount" value={gbp(latePaymentEstimate.principalAmount)} />
+                      <StatBlock label="Legal total" value={gbp(latePaymentEstimate.updatedBalance)} tone="positive" />
+                      <StatBlock label="Interest" value={gbp(latePaymentEstimate.statutoryInterest)} />
+                      <StatBlock label="Recovery fee" value={gbp(latePaymentEstimate.fixedCompensation)} />
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                      {`Estimate uses the UK statutory late-payment rate of ${latePaymentEstimate.statutoryAnnualRatePercent.toFixed(2)}% (${latePaymentEstimate.statutoryBaseRatePercent.toFixed(2)}% Bank Rate + 8.00%) for the current reference window.`}
+                    </p>
+                  </div>
+                )}
 
                 <div>
                   <div className="text-xs uppercase tracking-wider text-muted-foreground">Rationale</div>
@@ -280,6 +299,11 @@ export function ApprovalDrawer({
                   Configure SMTP_* and COMMUNICATIONS_TEST_EMAIL in backend .env to send real emails.
                 </p>
               )}
+              {canVoice && !browserVoiceConfigured && (
+                <p className="text-xs text-muted-foreground">
+                  Configure GEMINI_API_KEY, AI_API_KEY, or VAPI keys in backend .env for browser voice.
+                </p>
+              )}
             </SheetFooter>
         </>
       </SheetContent>
@@ -305,3 +329,4 @@ function StatBlock({
     </div>
   );
 }
+

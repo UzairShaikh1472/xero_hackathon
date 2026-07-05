@@ -77,6 +77,11 @@ export type CompanySnapshot = {
   contactsCount: number;
   totalOutstandingReceivables: Money;
   overdueReceivables: Money;
+  statutoryInterestEstimate: Money;
+  fixedCompensationEstimate: Money;
+  overdueWithLatePaymentCharges: Money;
+  statutoryAnnualRatePercent: number;
+  statutoryBaseRatePercent: number;
   averageInvoiceValue: Money;
   overdueInvoicesCount: number;
   atRiskInvoicesCount: number;
@@ -158,6 +163,12 @@ export type InvoiceRisk = {
   recoveryProbability: number;
   expectedDaysToCollect: number;
   expectedRecovery: Money;
+  statutoryInterest: Money;
+  fixedCompensation: Money;
+  overdueBalanceWithCharges: Money;
+  statutoryAnnualRatePercent: number;
+  statutoryBaseRatePercent: number;
+  latePaymentAssumptionNote: string;
 };
 
 export type InvoiceRiskSnapshot = {
@@ -242,12 +253,20 @@ export type CommunicationActionResult = {
 export type VoiceSessionContext = {
   token: string;
   draftId: string;
+  draftType?: NegotiationDraft["type"];
   contactName: string;
   invoiceNumber: string;
   amountDue: number;
+  principalAmount?: number;
+  statutoryInterest?: number;
+  fixedCompensation?: number;
+  overdueBalanceWithCharges?: number;
+  statutoryAnnualRatePercent?: number;
   currency: string;
   daysOverdue: number;
+  daysSinceLastActivity?: number;
   discountPercent?: number;
+  offerPercent?: number;
   expiresAt: string;
   vapiPublicKey?: string;
   vapiAssistantId?: string;
@@ -266,6 +285,18 @@ export type VoiceChatRequest = {
 
 export type VoiceChatResponse = {
   reply: string;
+  audioUrl?: string;
+  audioProvider?: "elevenlabs";
+};
+
+export type DemoNarrationRequest = {
+  text: string;
+};
+
+export type DemoNarrationResponse = {
+  text: string;
+  audioUrl?: string;
+  audioProvider?: "elevenlabs";
 };
 
 export type VoiceCallTurn = {

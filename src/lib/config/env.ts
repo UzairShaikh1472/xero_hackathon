@@ -32,7 +32,11 @@ const envSchema = z.object({
   COMMUNICATIONS_TEST_PHONE: z.string().default(""),
   CALL_REPORT_EMAIL: z.string().default(""),
   VAPI_PUBLIC_KEY: z.string().default(""),
-  VAPI_ASSISTANT_ID: z.string().default("")
+  VAPI_ASSISTANT_ID: z.string().default(""),
+  ELEVENLABS_API_KEY: z.string().default(""),
+  ELEVENLABS_VOICE_ID: z.string().default(""),
+  ELEVENLABS_DEMO_VOICE_ID: z.string().default(""),
+  ELEVENLABS_MODEL: z.string().default("eleven_flash_v2_5")
 });
 
 export const env = envSchema.parse(process.env);

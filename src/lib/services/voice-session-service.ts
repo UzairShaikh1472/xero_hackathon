@@ -16,6 +16,11 @@ type StoredVoiceSession = {
   contactName: string;
   invoiceNumber: string;
   amountDue: number;
+  principalAmount?: number;
+  statutoryInterest?: number;
+  fixedCompensation?: number;
+  overdueBalanceWithCharges?: number;
+  statutoryAnnualRatePercent?: number;
   currency: string;
   daysOverdue: number;
   daysSinceLastActivity?: number;
@@ -90,7 +95,17 @@ export function createVoiceSessionFromDraft(draft: NegotiationDraft) {
       draft.type === "reengagement_quote"
         ? "reactivation"
         : getMetadataString(draft, "invoiceNumber") ?? "outstanding invoice",
-    amountDue: draft.expectedImpact.amount,
+    amountDue:
+      draft.type === "reengagement_quote"
+        ? draft.expectedImpact.amount
+        : getMetadataNumber(draft, "statutoryTotalAmountDue") || draft.expectedImpact.amount,
+    principalAmount: getMetadataNumber(draft, "principalAmount") || undefined,
+    statutoryInterest: getMetadataNumber(draft, "statutoryInterest") || undefined,
+    fixedCompensation: getMetadataNumber(draft, "fixedCompensation") || undefined,
+    overdueBalanceWithCharges:
+      getMetadataNumber(draft, "statutoryTotalAmountDue") || undefined,
+    statutoryAnnualRatePercent:
+      getMetadataNumber(draft, "statutoryAnnualRatePercent") || undefined,
     currency: draft.currency,
     daysOverdue: draft.type === "reengagement_quote" ? daysSinceLastActivity ?? 0 : daysOverdue,
     daysSinceLastActivity,
@@ -133,6 +148,11 @@ export function buildVoiceSessionContext(token: string): VoiceSessionContext {
           contactName: session.contactName,
           invoiceNumber: session.invoiceNumber,
           amountDue: session.amountDue,
+          principalAmount: session.principalAmount,
+          statutoryInterest: session.statutoryInterest,
+          fixedCompensation: session.fixedCompensation,
+          overdueBalanceWithCharges: session.overdueBalanceWithCharges,
+          statutoryAnnualRatePercent: session.statutoryAnnualRatePercent,
           currency: session.currency,
           daysOverdue: session.daysOverdue,
           discountPercent: session.discountPercent,
@@ -141,12 +161,20 @@ export function buildVoiceSessionContext(token: string): VoiceSessionContext {
   return {
     token,
     draftId: session.draftId,
+    draftType: session.draftType,
     contactName: session.contactName,
     invoiceNumber: session.invoiceNumber,
     amountDue: session.amountDue,
+    principalAmount: session.principalAmount,
+    statutoryInterest: session.statutoryInterest,
+    fixedCompensation: session.fixedCompensation,
+    overdueBalanceWithCharges: session.overdueBalanceWithCharges,
+    statutoryAnnualRatePercent: session.statutoryAnnualRatePercent,
     currency: session.currency,
     daysOverdue: session.daysOverdue,
+    daysSinceLastActivity: session.daysSinceLastActivity,
     discountPercent: session.discountPercent,
+    offerPercent: session.offerPercent,
     expiresAt: new Date(session.expiresAt).toISOString(),
     vapiPublicKey: env.VAPI_PUBLIC_KEY || undefined,
     vapiAssistantId: env.VAPI_ASSISTANT_ID || undefined,

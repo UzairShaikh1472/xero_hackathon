@@ -11,6 +11,11 @@ export interface CompanySnapshot {
   currency: Currency;
   currentCash: number;
   overdueReceivables: number;
+  statutoryInterestEstimate?: number;
+  fixedCompensationEstimate?: number;
+  overdueWithLatePaymentCharges?: number;
+  statutoryAnnualRatePercent?: number;
+  statutoryBaseRatePercent?: number;
   /** Sum of expectedRecovery across overdue invoices — see engines/recovery.ts. */
   recoverableCash: number;
   /** Lapsed-customer reactivation value only — repeat-buyer upsell isn't included. */
@@ -40,6 +45,12 @@ export interface InvoiceRisk {
   recoveryProbability: number;
   expectedDaysToCollect: number;
   expectedRecovery: number;
+  statutoryInterest?: number;
+  fixedCompensation?: number;
+  overdueBalanceWithCharges?: number;
+  statutoryAnnualRatePercent?: number;
+  statutoryBaseRatePercent?: number;
+  latePaymentAssumptionNote?: string;
 }
 
 export interface SupplierOpportunity {
@@ -92,6 +103,16 @@ export interface NegotiationDraft {
   daysOverdue?: number;
   /** Lapsed-customer days since last order — drives email vs voice-agent outreach. */
   daysSilent?: number;
+  latePaymentEstimate?: {
+    principalAmount: number;
+    statutoryInterest: number;
+    fixedCompensation: number;
+    updatedBalance: number;
+    statutoryAnnualRatePercent: number;
+    statutoryBaseRatePercent: number;
+    dailyInterest: number;
+    assumptionNote: string;
+  };
   urgency: Urgency;
   reason: string;
   proposedAction: string;

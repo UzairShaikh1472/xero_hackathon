@@ -145,7 +145,7 @@ export function ControlRoomProvider({ children }: { children: ReactNode }) {
     }
     if (!health?.browserVoiceConfigured) {
       toast.error("Voice agent is not configured", {
-        description: "Set GEMINI_API_KEY or VAPI keys in backend .env.",
+        description: "Set GEMINI_API_KEY, AI_API_KEY, or VAPI keys in backend .env.",
       });
       return;
     }
@@ -170,7 +170,7 @@ export function ControlRoomProvider({ children }: { children: ReactNode }) {
   const handleStartCall = async (draft: NegotiationDraft) => {
     if (!health?.browserVoiceConfigured) {
       toast.error("Voice agent is not configured", {
-        description: "Set GEMINI_API_KEY or VAPI keys in backend .env.",
+        description: "Set GEMINI_API_KEY, AI_API_KEY, or VAPI keys in backend .env.",
       });
       return;
     }

@@ -22,6 +22,11 @@ export interface ReceivablesPromptContext {
   discountPercent?: number;
   discountedAmount?: number;
   organizationName?: string;
+  principalAmount?: number;
+  statutoryInterest?: number;
+  fixedCompensation?: number;
+  statutoryTotalAmountDue?: number;
+  statutoryAnnualRatePercent?: number;
 }
 
 export function receivablesUserPrompt(
@@ -36,6 +41,13 @@ export function receivablesUserPrompt(
   const orgLine = context.organizationName
     ? `- Sender organization: ${context.organizationName}`
     : "";
+  const legalLine =
+    context.statutoryTotalAmountDue != null &&
+    context.statutoryInterest != null &&
+    context.fixedCompensation != null &&
+    context.statutoryAnnualRatePercent != null
+      ? `- Estimated UK statutory late-payment balance: £${context.statutoryTotalAmountDue.toFixed(2)} total (includes £${context.statutoryInterest.toFixed(2)} interest + £${context.fixedCompensation.toFixed(2)} recovery fee at ${context.statutoryAnnualRatePercent.toFixed(2)}% annual rate)`
+      : "";
 
   return `Draft a receivables negotiation message.
 
@@ -50,6 +62,7 @@ FACTS (use only these; do not invent anything else):
 - Expected cash impact: £${risk.expectedCashImpact.toFixed(2)}
 - Liquidity priority score: ${risk.liquidityPriorityScore.toFixed(2)}
 ${discountLine}
+${legalLine}
 ${orgLine}
 
 Write draftMessage (body paragraphs only: no greeting or sign-off) offering or following the recommended action.`;

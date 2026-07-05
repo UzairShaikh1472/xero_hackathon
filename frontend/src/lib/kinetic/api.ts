@@ -31,6 +31,11 @@ type SummaryData = {
   organizationName: string;
   currency: string;
   overdueReceivables: Money;
+  statutoryInterestEstimate?: Money;
+  fixedCompensationEstimate?: Money;
+  overdueWithLatePaymentCharges?: Money;
+  statutoryAnnualRatePercent?: number;
+  statutoryBaseRatePercent?: number;
 };
 
 type LiquidityData = {
@@ -65,6 +70,12 @@ type AtRiskItem = {
   recoveryProbability: number;
   expectedDaysToCollect: number;
   expectedRecovery: Money;
+  statutoryInterest?: Money;
+  fixedCompensation?: Money;
+  overdueBalanceWithCharges?: Money;
+  statutoryAnnualRatePercent?: number;
+  statutoryBaseRatePercent?: number;
+  latePaymentAssumptionNote?: string;
 };
 
 type AtRiskData = {
@@ -111,17 +122,34 @@ type BackendNegotiationDraft = {
 export type VoiceSessionData = {
   token: string;
   draftId: string;
+  draftType?: "receivables_discount" | "payables_extension" | "reengagement_quote";
   contactName: string;
   invoiceNumber: string;
   amountDue: number;
+  principalAmount?: number;
+  statutoryInterest?: number;
+  fixedCompensation?: number;
+  overdueBalanceWithCharges?: number;
+  statutoryAnnualRatePercent?: number;
   currency: string;
   daysOverdue: number;
+  daysSinceLastActivity?: number;
   discountPercent?: number;
+  offerPercent?: number;
   expiresAt: string;
   vapiPublicKey?: string;
   vapiAssistantId?: string;
   systemPrompt: string;
 };
+
+function normalizeConfidence(
+  metadata: Record<string, string | number | boolean | null>,
+  fallback = 0.72,
+) {
+  const raw =
+    typeof metadata.confidenceLevel === "number" ? metadata.confidenceLevel : fallback;
+  return Number(Math.min(0.95, Math.max(0.55, raw)).toFixed(2));
+}
 
 async function fetchEnvelope<T>(path: string): Promise<ApiEnvelope<T>> {
   const res = await fetch(`${API_BASE}${path}`);
@@ -230,6 +258,42 @@ export function mapBackendDraft(draft: BackendNegotiationDraft): NegotiationDraf
         : undefined,
     daysOverdue,
     daysSilent,
+    latePaymentEstimate:
+      typeof draft.metadata.statutoryTotalAmountDue === "number"
+        ? {
+            principalAmount:
+              typeof draft.metadata.principalAmount === "number"
+                ? draft.metadata.principalAmount
+                : typeof draft.metadata.amountDue === "number"
+                  ? draft.metadata.amountDue
+                  : draft.expectedImpact.amount,
+            statutoryInterest:
+              typeof draft.metadata.statutoryInterest === "number"
+                ? draft.metadata.statutoryInterest
+                : 0,
+            fixedCompensation:
+              typeof draft.metadata.fixedCompensation === "number"
+                ? draft.metadata.fixedCompensation
+                : 0,
+            updatedBalance: draft.metadata.statutoryTotalAmountDue,
+            statutoryAnnualRatePercent:
+              typeof draft.metadata.statutoryAnnualRatePercent === "number"
+                ? draft.metadata.statutoryAnnualRatePercent
+                : 0,
+            statutoryBaseRatePercent:
+              typeof draft.metadata.statutoryBaseRatePercent === "number"
+                ? draft.metadata.statutoryBaseRatePercent
+                : 0,
+            dailyInterest:
+              typeof draft.metadata.statutoryDailyInterest === "number"
+                ? draft.metadata.statutoryDailyInterest
+                : 0,
+            assumptionNote:
+              typeof draft.metadata.latePaymentAssumptionNote === "string"
+                ? draft.metadata.latePaymentAssumptionNote
+                : "Estimated UK B2B statutory late-payment charges.",
+          }
+        : undefined,
     urgency,
     reason: draft.reason,
     proposedAction:
@@ -240,7 +304,7 @@ export function mapBackendDraft(draft: BackendNegotiationDraft): NegotiationDraf
     hoursToImpact: isReengagement
       ? Math.max(24, Math.round((daysSilent ?? 90) * 2))
       : Math.max(24, Math.round((daysOverdue ?? 0) * 12)),
-    confidence: 0.85,
+    confidence: normalizeConfidence(draft.metadata),
     subject: draft.subjectLine,
     body: draft.draftMessage,
   };
@@ -297,6 +361,12 @@ function mapAtRisk(items: AtRiskItem[]): InvoiceRisk[] {
     recoveryProbability: item.recoveryProbability,
     expectedDaysToCollect: item.expectedDaysToCollect,
     expectedRecovery: item.expectedRecovery.amount,
+    statutoryInterest: item.statutoryInterest?.amount,
+    fixedCompensation: item.fixedCompensation?.amount,
+    overdueBalanceWithCharges: item.overdueBalanceWithCharges?.amount,
+    statutoryAnnualRatePercent: item.statutoryAnnualRatePercent,
+    statutoryBaseRatePercent: item.statutoryBaseRatePercent,
+    latePaymentAssumptionNote: item.latePaymentAssumptionNote,
   }));
 }
 
@@ -416,6 +486,11 @@ function toControlRoomData(
       currency: "GBP",
       currentCash: normalized.cash,
       overdueReceivables: summary.data.overdueReceivables.amount,
+      statutoryInterestEstimate: summary.data.statutoryInterestEstimate?.amount,
+      fixedCompensationEstimate: summary.data.fixedCompensationEstimate?.amount,
+      overdueWithLatePaymentCharges: summary.data.overdueWithLatePaymentCharges?.amount,
+      statutoryAnnualRatePercent: summary.data.statutoryAnnualRatePercent,
+      statutoryBaseRatePercent: summary.data.statutoryBaseRatePercent,
       recoverableCash: atRisk.data.totalRecoverableCash.amount,
       revenueOpportunityTotal,
     },
@@ -606,13 +681,28 @@ export async function sendVoiceChat(
   token: string,
   message: string,
   history: Array<{ role: "user" | "assistant"; content: string }>,
-): Promise<string> {
-  const envelope = await postJson<{ reply: string }>("/api/voice/chat", {
+): Promise<{ reply: string; audioUrl?: string; audioProvider?: "elevenlabs" }> {
+  const envelope = await postJson<{
+    reply: string;
+    audioUrl?: string;
+    audioProvider?: "elevenlabs";
+  }>("/api/voice/chat", {
     token,
     message,
     history,
   });
-  return envelope.data.reply;
+  return envelope.data;
+}
+
+export async function fetchDemoNarration(
+  text: string,
+): Promise<{ text: string; audioUrl?: string; audioProvider?: "elevenlabs" }> {
+  const envelope = await postJson<{
+    text: string;
+    audioUrl?: string;
+    audioProvider?: "elevenlabs";
+  }>("/api/demo/narration", { text });
+  return envelope.data;
 }
 
 export type VoiceCallReport = {

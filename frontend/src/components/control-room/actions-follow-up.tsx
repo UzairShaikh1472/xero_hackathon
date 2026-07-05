@@ -22,36 +22,36 @@ const CHANNELS: Array<{
 }> = [
   {
     key: "email",
-    title: "Email",
-    subtitle: "Gentle reminder: invoices overdue under 14 days",
+    title: "Email reminder",
+    subtitle: "Automatic first touch: invoices overdue under 14 days",
     icon: <Mail className="size-4" />,
     emptyHint: "No receivables drafts eligible for email yet. Email is for invoices overdue by fewer than 14 days.",
     actionLabel: "Send email",
   },
   {
     key: "agent_call",
-    title: "Call with agent",
-    subtitle: "AI voice follow-up: 14+ days overdue",
+    title: "AI voice call",
+    subtitle: "Automatic escalation: invoices 14+ days overdue",
     icon: (
       <span className="flex items-center gap-0.5">
         <Bot className="size-3.5" />
         <Phone className="size-3.5" />
       </span>
     ),
-    emptyHint: "No drafts ready for AI voice calls. Voice invites apply to invoices 14+ days overdue.",
+    emptyHint: "No overdue invoices are ready for AI voice calls. This lane only shows payment collection calls at 14+ days overdue.",
     actionLabel: "Send voice invite",
   },
   {
     key: "human_call",
     title: "Call with human",
-    subtitle: "Escalated: high or critical urgency, needs you",
+    subtitle: "Only after automated follow-up needs human help",
     icon: (
       <span className="flex items-center gap-0.5">
         <User className="size-3.5" />
         <Phone className="size-3.5" />
       </span>
     ),
-    emptyHint: "No escalations right now. Human calls are suggested for critical or high-urgency accounts.",
+    emptyHint: "No human escalation right now. This stays empty until the automated payment flow needs a person.",
     actionLabel: "Schedule call",
   },
 ];
@@ -60,7 +60,6 @@ export function ActionsFollowUp({
   drafts,
   emailConfigured,
   browserVoiceConfigured,
-  onOpen,
   onSendEmail,
   onSendVoiceInvite,
   onStartCall,
@@ -68,7 +67,6 @@ export function ActionsFollowUp({
   drafts: NegotiationDraft[];
   emailConfigured: boolean;
   browserVoiceConfigured: boolean;
-  onOpen: (draft: NegotiationDraft) => void;
   onSendEmail: (
     draft: NegotiationDraft,
     edits: { subject: string; body: string },
@@ -82,14 +80,14 @@ export function ActionsFollowUp({
   const groups = groupFollowUps(drafts);
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-5">
       <LensHeader
         icon={<Phone className="size-4" />}
-        title="Follow up"
-        subtitle="Pick a channel for each receivables draft: preview before sending"
+        title="Payment automation"
+        subtitle="Under 14 days: email. 14+ days overdue: AI collections call. Human escalation only if automation cannot resolve it."
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {CHANNELS.map((channel) => (
           <FollowUpColumn
             key={channel.key}
@@ -97,7 +95,6 @@ export function ActionsFollowUp({
             drafts={groups[channel.key === "email" ? "email" : channel.key === "agent_call" ? "agentCall" : "humanCall"]}
             emailConfigured={emailConfigured}
             browserVoiceConfigured={browserVoiceConfigured}
-            onOpen={onOpen}
             onSendEmail={onSendEmail}
             onSendVoiceInvite={onSendVoiceInvite}
             onStartCall={onStartCall}
@@ -113,7 +110,6 @@ function FollowUpColumn({
   drafts,
   emailConfigured,
   browserVoiceConfigured,
-  onOpen,
   onSendEmail,
   onSendVoiceInvite,
   onStartCall,
@@ -122,7 +118,6 @@ function FollowUpColumn({
   drafts: NegotiationDraft[];
   emailConfigured: boolean;
   browserVoiceConfigured: boolean;
-  onOpen: (draft: NegotiationDraft) => void;
   onSendEmail: (
     draft: NegotiationDraft,
     edits: { subject: string; body: string },
@@ -138,7 +133,7 @@ function FollowUpColumn({
   const handleExecute = async (draft: NegotiationDraft) => {
     setBusyId(draft.id);
     const pending = toast.loading(
-      channel.key === "email" ? "Sending email…" : "Sending voice invite…",
+      channel.key === "email" ? "Sending email..." : "Sending voice invite...",
     );
     try {
       if (channel.key === "email") {
@@ -157,7 +152,7 @@ function FollowUpColumn({
 
   const handleCallNow = async (draft: NegotiationDraft) => {
     setBusyId(draft.id);
-    const pending = toast.loading("Opening call…");
+    const pending = toast.loading("Opening call...");
     try {
       await onStartCall(draft);
     } catch (err) {
@@ -166,10 +161,6 @@ function FollowUpColumn({
       setBusyId(null);
       toast.dismiss(pending);
     }
-  };
-
-  const handlePreview = (draft: NegotiationDraft) => {
-    onOpen(draft);
   };
 
   const canExecute =
@@ -185,22 +176,33 @@ function FollowUpColumn({
       : channel.key === "agent_call" && !emailConfigured
         ? "Configure SMTP in backend .env"
         : channel.key === "agent_call" && !browserVoiceConfigured
-          ? "Configure GEMINI_API_KEY in backend .env"
+          ? "Configure GEMINI_API_KEY, AI_API_KEY, or Vapi in backend .env"
           : null;
 
   return (
-    <div className="panel flex flex-col p-5">
+    <div
+      className="panel flex flex-col p-6"
+      style={{ boxShadow: "var(--shadow-elevated)" }}
+    >
       <div className="flex items-start gap-3">
-        <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-secondary">
+        <div
+          className="grid size-10 shrink-0 place-items-center rounded-2xl bg-secondary"
+          style={{
+            boxShadow:
+              channel.key === "agent_call"
+                ? "0 0 0 1px rgba(98,240,255,0.16), 0 14px 28px -22px rgba(0,182,255,0.55)"
+                : undefined,
+          }}
+        >
           {channel.icon}
         </div>
         <div>
-          <div className="font-semibold">{channel.title}</div>
-          <div className="text-sm text-muted-foreground">{channel.subtitle}</div>
+          <div className="text-lg font-semibold">{channel.title}</div>
+          <div className="mt-1 text-sm text-muted-foreground">{channel.subtitle}</div>
         </div>
       </div>
 
-      <Badge variant="outline" className="mt-4 w-fit border-hairline">
+      <Badge variant="outline" className="mt-5 w-fit border-hairline bg-white/45">
         {drafts.length} ready
       </Badge>
 
@@ -208,38 +210,39 @@ function FollowUpColumn({
         <p className="mt-2 text-xs text-muted-foreground">{executeDisabledReason}</p>
       )}
 
-      <div className="mt-4 flex flex-1 flex-col gap-2">
+      <div className="mt-5 flex flex-1 flex-col gap-3">
         {drafts.length === 0 ? (
-          <p className="rounded-xl border border-dashed hairline bg-surface-2/40 p-4 text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed hairline bg-surface-2/45 p-5 text-sm text-muted-foreground">
             {channel.emptyHint}
           </p>
         ) : (
           drafts.map((draft) => (
             <div
               key={draft.id}
-              className="rounded-xl border hairline bg-surface-2/40 p-3"
+              className="rounded-2xl border hairline bg-surface-2/52 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/68"
+              style={{
+                boxShadow:
+                  channel.key === "agent_call"
+                    ? "0 10px 28px -24px rgba(0,182,255,0.55)"
+                    : undefined,
+              }}
             >
               <div className="flex items-center gap-2">
                 <UrgencyDot u={draft.urgency} />
-                <span className="font-medium truncate">{draft.targetName}</span>
+                <span className="truncate text-base font-medium">{draft.targetName}</span>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
                 {draft.daysOverdue != null && (
                   <span>{draft.daysOverdue}d overdue</span>
+                )}
+                {draft.latePaymentEstimate && (
+                  <span>{`UK total ${gbp(draft.latePaymentEstimate.updatedBalance)}`}</span>
                 )}
                 <span className="numeric text-positive">
                   +{gbp(draft.expectedCashImpact)}
                 </span>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handlePreview(draft)}
-                >
-                  Preview
-                </Button>
+              <div className="mt-4 flex flex-wrap gap-2">
                 {channel.key !== "human_call" && (
                   <Button
                     type="button"
@@ -261,7 +264,9 @@ function FollowUpColumn({
                     variant="outline"
                     disabled={!browserVoiceConfigured || busyId === draft.id}
                     title={
-                      !browserVoiceConfigured ? "Configure GEMINI_API_KEY in backend .env" : undefined
+                      !browserVoiceConfigured
+                        ? "Configure GEMINI_API_KEY, AI_API_KEY, or Vapi in backend .env"
+                        : undefined
                     }
                     onClick={() => void handleCallNow(draft)}
                   >
@@ -288,3 +293,4 @@ function FollowUpColumn({
     </div>
   );
 }
+

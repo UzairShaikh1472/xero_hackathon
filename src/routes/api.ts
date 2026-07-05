@@ -15,6 +15,7 @@ import {
   buildSendDraftEmailResponse,
   buildSendVoiceInviteResponse
 } from "../lib/services/communications-service.js";
+import { buildDemoNarrationResponse } from "../lib/services/demo-narration-service.js";
 import { buildExecutionHistoryResponse } from "../lib/services/execution-history-service.js";
 import { buildFollowUpsResponse } from "../lib/services/resolved-actions-service.js";
 import { buildHealthResponse } from "../lib/services/health-service.js";
@@ -270,6 +271,15 @@ apiRouter.get("/voice/sessions/:token", async (request, response, next) => {
 apiRouter.post("/voice/chat", async (request, response, next) => {
   try {
     const payload = await buildVoiceChatResponse(request.body);
+    response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.post("/demo/narration", async (request, response, next) => {
+  try {
+    const payload = await buildDemoNarrationResponse(request.body);
     response.json(payload);
   } catch (error) {
     next(error);

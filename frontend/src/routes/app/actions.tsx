@@ -32,7 +32,6 @@ function ActionsPage() {
     isDraftsError,
     draftsError,
     tourStep,
-    setOpenDraft,
     handleSendEmail,
     handleSendVoiceInvite,
     handleStartCall,
@@ -67,19 +66,19 @@ function ActionsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Actions</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <div className="space-y-10">
+      <div className="space-y-2">
+        <h1 className="text-3xl tracking-tight">Actions</h1>
+        <p className="max-w-3xl text-sm text-muted-foreground">
           Choose how to follow up: email, AI voice, or human escalation.
         </p>
         {isDraftsFetching && data.drafts.length === 0 && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Loading follow-up drafts from Xero…
+          <p className="text-sm text-muted-foreground">
+            Loading follow-up drafts from Xero...
           </p>
         )}
         {!isDraftsFetching && data.drafts.length === 0 && (
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             No overdue receivables drafts right now. Check Cash Lens for at-risk invoices or refresh after syncing Xero.
           </p>
         )}
@@ -93,7 +92,6 @@ function ActionsPage() {
         drafts={data.drafts}
         emailConfigured={health?.emailConfigured ?? false}
         browserVoiceConfigured={health?.browserVoiceConfigured ?? false}
-        onOpen={setOpenDraft}
         onSendEmail={handleSendEmail}
         onSendVoiceInvite={handleSendVoiceInvite}
         onStartCall={handleStartCall}

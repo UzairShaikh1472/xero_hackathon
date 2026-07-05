@@ -4,7 +4,7 @@
  * Recovery probability is anchored on commercial credit industry benchmarks
  * (Atradius / UK late-payment data): collectability decays as an invoice ages.
  * Time discount prices the cost of cash arriving later using the UK statutory
- * late-payment rate (Bank of England base rate 3.75% + 8% = 12.5% APR).
+ * late-payment rate (Bank of England reference rate 3.75% + 8% = 11.75% APR).
  */
 
 const RECOVERY_PROBABILITY_BUCKETS: Array<{ maxDays: number; probability: number }> = [
@@ -22,8 +22,8 @@ const EXPECTED_DAYS_TO_COLLECT_BUCKETS: Array<{ maxDays: number; days: number }>
   { maxDays: Infinity, days: 45 }
 ];
 
-/** UK statutory late payment rate: Bank of England base rate (3.75%) + 8%. */
-const UK_LATE_PAYMENT_APR = 0.125;
+/** UK statutory late payment rate: Bank of England reference rate (3.75%) + 8%. */
+const UK_LATE_PAYMENT_APR = 0.1175;
 
 export type PaymentHistoryTier =
   | "early_or_on_time"

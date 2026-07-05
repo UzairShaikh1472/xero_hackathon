@@ -34,6 +34,7 @@ import {
 import { logger } from "../utils/logger.js";
 import { getPhaseOneSnapshotData } from "./phase-one-sync-service.js";
 import { snapshotToNormalized } from "./snapshot-to-normalized.js";
+import { calculateUkLatePaymentEstimate } from "./uk-late-payment-service.js";
 
 function clampPercent(value: number | undefined, fallback: number, min: number, max: number) {
   if (typeof value !== "number" || Number.isNaN(value)) {
@@ -70,10 +71,57 @@ function persistDraft(draft: NegotiationDraft) {
   });
 }
 
+function receivablesDraftHasLatePaymentMetadata(draft: NegotiationDraft) {
+  return (
+    draft.type !== "receivables_discount" ||
+    typeof draft.metadata.statutoryTotalAmountDue === "number"
+  );
+}
+
 function urgencyToPriority(urgency: Urgency): NegotiationDraft["priority"] {
   if (urgency === "critical" || urgency === "high") return "high";
   if (urgency === "medium") return "medium";
   return "low";
+}
+
+function clampConfidence(value: number) {
+  return Number(Math.min(0.95, Math.max(0.55, value)).toFixed(2));
+}
+
+function draftHasConfidenceMetadata(draft: NegotiationDraft) {
+  return typeof draft.metadata.confidenceLevel === "number";
+}
+
+function buildReceivablesConfidence(risk: AgentInvoiceRisk) {
+  const reliabilityFactor = risk.paymentReliabilityScore / 100;
+  const overdueFactor = Math.min(1, risk.daysOverdue / 30);
+  const priorityFactor = Math.min(1, risk.liquidityPriorityScore / 20);
+  return clampConfidence(
+    0.58 + reliabilityFactor * 0.14 + overdueFactor * 0.15 + priorityFactor * 0.08,
+  );
+}
+
+function buildPayablesConfidence(pressure: PayablePressure, matchedPayable: boolean) {
+  const urgencyFactor =
+    pressure.urgency === "critical"
+      ? 1
+      : pressure.urgency === "high"
+        ? 0.8
+        : pressure.urgency === "medium"
+          ? 0.6
+          : 0.4;
+  const amountFactor = Math.min(1, pressure.amount / 10000);
+  return clampConfidence(
+    0.56 + urgencyFactor * 0.16 + amountFactor * 0.1 + (matchedPayable ? 0.08 : 0.03),
+  );
+}
+
+function buildReengagementConfidence(customer: LapsedCustomer, hasContactEmail: boolean) {
+  const inactivityFactor = Math.min(1, customer.daysSinceLastActivity / 365);
+  const ltvFactor = Math.min(1, customer.historicalLTV / 15000);
+  return clampConfidence(
+    0.57 + inactivityFactor * 0.14 + ltvFactor * 0.14 + (hasContactEmail ? 0.06 : 0.02),
+  );
 }
 
 function toApiDraft(
@@ -170,6 +218,10 @@ function buildReceivablesTemplateDraft(
   tone: string
 ): NegotiationDraft {
   const currency = invoice.amountDue.currency;
+  const latePaymentEstimate = calculateUkLatePaymentEstimate(
+    invoice.amountDue.amount,
+    invoice.daysOverdue,
+  );
   return {
     id: `draft_receivables_${invoice.id}`,
     type: "receivables_discount",
@@ -177,22 +229,35 @@ function buildReceivablesTemplateDraft(
     targetName: invoice.contactName,
     currency,
     priority: invoice.daysOverdue >= 7 ? "high" : "medium",
-    reason: `${invoice.invoiceNumber} is overdue by ${invoice.daysOverdue} days with ${currency} ${invoice.amountDue.amount} outstanding.`,
+    reason: `${invoice.invoiceNumber} is overdue by ${invoice.daysOverdue} days with ${currency} ${invoice.amountDue.amount} outstanding. Estimated UK late-payment charges now bring the balance to ${currency} ${latePaymentEstimate.updatedBalance.toFixed(2)}.`,
     expectedImpact: {
       amount: risk.expectedCashImpact,
       currency
     },
     subjectLine: `Quick settlement option for ${invoice.invoiceNumber}`,
-    draftMessage: `We noticed ${invoice.invoiceNumber} is still outstanding. If payment can be completed this week, we can offer a ${discountPercent}% early settlement discount to help close it promptly.`,
+    draftMessage: `We noticed ${invoice.invoiceNumber} is still outstanding. Under UK late-payment rules, the estimated balance is now ${currency} ${latePaymentEstimate.updatedBalance.toFixed(2)}, including ${currency} ${latePaymentEstimate.statutoryInterest.toFixed(2)} in interest and a ${currency} ${latePaymentEstimate.fixedCompensation.toFixed(2)} recovery fee. If payment can be completed this week, we can instead settle at ${currency} ${risk.expectedCashImpact.toFixed(2)} with a ${discountPercent}% early-settlement adjustment to help close it promptly.`,
     metadata: {
       tone,
       discountPercent,
+      principalAmount: invoice.amountDue.amount,
       invoiceNumber: invoice.invoiceNumber,
       amountDue: invoice.amountDue.amount,
       daysOverdue: invoice.daysOverdue,
+      statutoryInterest: latePaymentEstimate.statutoryInterest,
+      fixedCompensation: latePaymentEstimate.fixedCompensation,
+      statutoryTotalAmountDue: latePaymentEstimate.updatedBalance,
+      statutoryAnnualRatePercent: Number(
+        (latePaymentEstimate.statutoryAnnualRate * 100).toFixed(2),
+      ),
+      statutoryBaseRatePercent: Number((latePaymentEstimate.baseRate * 100).toFixed(2)),
+      statutoryDailyInterest: Number(
+        (latePaymentEstimate.principalAmount * latePaymentEstimate.dailyInterestRate).toFixed(2),
+      ),
+      latePaymentAssumptionNote: latePaymentEstimate.assumptionNote,
       organizationName: snapshot.sync.organizationName ?? null,
       contactEmail: snapshot.contacts.find((item) => item.id === invoice.contactId)?.email ?? null,
       contactPhone: snapshot.contacts.find((item) => item.id === invoice.contactId)?.phone ?? null,
+      confidenceLevel: buildReceivablesConfidence(risk),
       agentGenerated: false
     }
   };
@@ -205,7 +270,12 @@ export async function buildReceivablesDraftResponse(
   const invoiceId = assertString(input.invoiceId, "invoiceId");
   const draftId = `draft_receivables_${invoiceId}`;
   const cached = getStoredDraft(draftId);
-  if (cached && input.useAgent !== true) {
+  if (
+    cached &&
+    input.useAgent !== true &&
+    receivablesDraftHasLatePaymentMetadata(cached) &&
+    draftHasConfidenceMetadata(cached)
+  ) {
     return {
       ok: true,
       mode: snapshot.sync.source,
@@ -224,6 +294,10 @@ export async function buildReceivablesDraftResponse(
   const currency = invoice.amountDue.currency;
   const tone = input.tone ?? "friendly";
   const risk = buildReceivablesRiskForInvoice(snapshot, invoice, discountPercent);
+  const latePaymentEstimate = calculateUkLatePaymentEstimate(
+    invoice.amountDue.amount,
+    invoice.daysOverdue,
+  );
 
   if (input.useAgent === false) {
     const draft = buildReceivablesTemplateDraft(snapshot, invoice, risk, discountPercent, tone);
@@ -245,6 +319,13 @@ export async function buildReceivablesDraftResponse(
         discountPercent,
         discountedAmount: risk.expectedCashImpact,
         organizationName,
+        principalAmount: invoice.amountDue.amount,
+        statutoryInterest: latePaymentEstimate.statutoryInterest,
+        fixedCompensation: latePaymentEstimate.fixedCompensation,
+        statutoryTotalAmountDue: latePaymentEstimate.updatedBalance,
+        statutoryAnnualRatePercent: Number(
+          (latePaymentEstimate.statutoryAnnualRate * 100).toFixed(2),
+        ),
       });
       return toApiDraft(agentDraft, {
         id: draftId,
@@ -255,9 +336,21 @@ export async function buildReceivablesDraftResponse(
         metadata: {
           tone,
           discountPercent,
+          principalAmount: invoice.amountDue.amount,
           invoiceNumber: invoice.invoiceNumber,
           amountDue: invoice.amountDue.amount,
           daysOverdue: invoice.daysOverdue,
+          statutoryInterest: latePaymentEstimate.statutoryInterest,
+          fixedCompensation: latePaymentEstimate.fixedCompensation,
+          statutoryTotalAmountDue: latePaymentEstimate.updatedBalance,
+          statutoryAnnualRatePercent: Number(
+            (latePaymentEstimate.statutoryAnnualRate * 100).toFixed(2),
+          ),
+          statutoryBaseRatePercent: Number((latePaymentEstimate.baseRate * 100).toFixed(2)),
+          statutoryDailyInterest: Number(
+            (latePaymentEstimate.principalAmount * latePaymentEstimate.dailyInterestRate).toFixed(2),
+          ),
+          latePaymentAssumptionNote: latePaymentEstimate.assumptionNote,
           organizationName: organizationName ?? null,
           contactEmail: snapshot.contacts.find((item) => item.id === invoice.contactId)?.email ?? null,
           contactPhone: snapshot.contacts.find((item) => item.id === invoice.contactId)?.phone ?? null
@@ -295,7 +388,11 @@ export async function buildReceivablesDraftsListResponse(options?: {
 
     const draftId = `draft_receivables_${invoice.id}`;
     const cached = getStoredDraft(draftId);
-    if (cached) {
+    if (
+      cached &&
+      receivablesDraftHasLatePaymentMetadata(cached) &&
+      draftHasConfidenceMetadata(cached)
+    ) {
       drafts.push(cached);
       continue;
     }
@@ -383,6 +480,7 @@ function buildReengagementTemplateDraft(
       contactEmail: contact.email ?? null,
       contactPhone: contact.phone ?? null,
       recommendedAction,
+      confidenceLevel: buildReengagementConfidence(customer, Boolean(contact.email)),
       agentGenerated: false,
     },
   };
@@ -404,7 +502,7 @@ export async function buildReengagementDraftsListResponse(options?: {
 
     const draftId = `draft_reengagement_${contact.id}`;
     const cached = getStoredDraft(draftId);
-    if (cached) {
+    if (cached && draftHasConfidenceMetadata(cached)) {
       drafts.push(cached);
       continue;
     }
@@ -480,6 +578,7 @@ export async function buildPayablesDraftResponse(
         recommendedAction: `Request ${extensionDays}-day payment extension`,
         expectedCashImpact: amount
       };
+  const payablesConfidence = buildPayablesConfidence(pressure, Boolean(matchingPayable));
 
   const draft = await withAgentDraft(
     async () => {
@@ -500,7 +599,8 @@ export async function buildPayablesDraftResponse(
           contactPhone:
             matchingPayable
               ? snapshot.contacts.find((item) => item.id === matchingPayable.contactId)?.phone ?? null
-              : null
+              : null,
+          confidenceLevel: payablesConfidence
         }
       });
     },
@@ -529,7 +629,8 @@ export async function buildPayablesDraftResponse(
         contactPhone:
           matchingPayable
             ? snapshot.contacts.find((item) => item.id === matchingPayable.contactId)?.phone ?? null
-            : null
+            : null,
+        confidenceLevel: payablesConfidence
       }
     })
   );
@@ -621,6 +722,7 @@ export async function buildReengagementQuoteResponse(
           contactEmail: contact.email ?? null,
           contactPhone: contact.phone ?? null,
           recommendedAction,
+          confidenceLevel: buildReengagementConfidence(customer, Boolean(contact.email)),
         },
       });
     },

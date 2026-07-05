@@ -38,7 +38,11 @@ import {
 
 async function getDraftOrThrow(draftId: string, targetId?: string) {
   const existing = getStoredDraft(draftId);
-  if (existing) {
+  if (
+    existing &&
+    (existing.type !== "receivables_discount" ||
+      typeof existing.metadata.statutoryTotalAmountDue === "number")
+  ) {
     return existing;
   }
 
@@ -184,11 +188,14 @@ function resolveDraftRecipient(draft: NegotiationDraft): string {
 function buildCallScript(draft: NegotiationDraft) {
   const invoiceNumber = getMetadataString(draft, "invoiceNumber") ?? "your outstanding invoice";
   const daysOverdue = getMetadataNumber(draft, "daysOverdue");
+  const updatedBalance = resolveLatePaymentBalance(draft);
+  const statutoryInterest = resolveLatePaymentInterest(draft);
+  const fixedCompensation = resolveLatePaymentCompensation(draft);
 
   return [
     `Hello, this is UpFlow calling on behalf of your finance team regarding ${invoiceNumber}.`,
     `This is a polite reminder that the invoice is now ${daysOverdue} days overdue.`,
-    `The current outstanding balance is ${draft.currency} ${draft.expectedImpact.amount.toFixed(2)}.`,
+    `Under UK late-payment rules, the current estimated balance is ${draft.currency} ${updatedBalance.toFixed(2)}, including ${draft.currency} ${statutoryInterest.toFixed(2)} in interest and a ${draft.currency} ${fixedCompensation.toFixed(2)} recovery fee.`,
     "If payment has already been arranged, please disregard this reminder and thank you.",
     "If not, we would appreciate settlement as soon as possible, or a quick reply to confirm your expected payment date.",
     "Thank you for your time and continued partnership."
@@ -244,6 +251,19 @@ function resolveAmountDue(draft: NegotiationDraft): number {
   }
 
   return draft.expectedImpact.amount;
+}
+
+function resolveLatePaymentBalance(draft: NegotiationDraft): number {
+  const stored = getMetadataNumber(draft, "statutoryTotalAmountDue");
+  return stored > 0 ? stored : resolveAmountDue(draft);
+}
+
+function resolveLatePaymentInterest(draft: NegotiationDraft): number {
+  return getMetadataNumber(draft, "statutoryInterest");
+}
+
+function resolveLatePaymentCompensation(draft: NegotiationDraft): number {
+  return getMetadataNumber(draft, "fixedCompensation");
 }
 
 function buildPaymentReminderPayload(
@@ -418,7 +438,7 @@ export async function buildSendVoiceInviteResponse(
   if (!isBrowserVoiceConfigured()) {
     throw new HttpError(
       503,
-      "Browser voice is not configured. Set GEMINI_API_KEY or VAPI_PUBLIC_KEY + VAPI_ASSISTANT_ID."
+      "Browser voice is not configured. Set GEMINI_API_KEY, AI_API_KEY, or VAPI_PUBLIC_KEY + VAPI_ASSISTANT_ID."
     );
   }
 
@@ -466,13 +486,13 @@ export async function buildSendVoiceInviteResponse(
   } else {
     const daysOverdue = getMetadataNumber(stored, "daysOverdue");
     const invoiceNumber = getMetadataString(stored, "invoiceNumber") ?? "outstanding invoice";
-    const amountLabel = `${stored.currency} ${stored.expectedImpact.amount.toFixed(2)}`;
+    const amountLabel = `${stored.currency} ${resolveLatePaymentBalance(stored).toFixed(2)}`;
     const subjectLine =
       input.subjectLine?.trim() ||
       `Let's resolve ${invoiceNumber}: speak with our agent`;
     const draftMessage =
       input.draftMessage?.trim() ||
-      `Invoice ${invoiceNumber} is ${daysOverdue} days overdue (${amountLabel}). Click below to speak with our collections agent at a time that suits you.`;
+      `Invoice ${invoiceNumber} is ${daysOverdue} days overdue. The current estimated UK late-payment balance is ${amountLabel}. Click below to speak with our collections agent at a time that suits you.`;
 
     outboundDraft.subjectLine = subjectLine;
     outboundDraft.draftMessage = draftMessage;
@@ -505,7 +525,7 @@ export async function buildSendVoiceInviteResponse(
     messageId: info.messageId
   });
 
-  trackFollowUp(stored, "email");
+  trackFollowUp(stored, "call");
 
   return {
     ok: true,
@@ -589,7 +609,7 @@ export async function buildCreateVoiceSessionResponse(draftId: string, invoiceId
   if (!isBrowserVoiceConfigured()) {
     throw new HttpError(
       503,
-      "Browser voice is not configured. Set GEMINI_API_KEY or VAPI_PUBLIC_KEY + VAPI_ASSISTANT_ID."
+      "Browser voice is not configured. Set GEMINI_API_KEY, AI_API_KEY, or VAPI_PUBLIC_KEY + VAPI_ASSISTANT_ID."
     );
   }
 

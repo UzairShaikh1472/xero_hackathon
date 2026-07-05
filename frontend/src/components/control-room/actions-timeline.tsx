@@ -101,19 +101,22 @@ export function ActionsTimeline({ steps }: { steps: EscalationStep[] }) {
   const totalEvents = steps.reduce((n, s) => n + s.events.length, 0);
 
   return (
-    <section className="space-y-4">
+    <section
+      className="panel space-y-5 p-6"
+      style={{ boxShadow: "var(--shadow-elevated)" }}
+    >
       <LensHeader
         icon={<Clock className="size-4" />}
         title="Escalation timeline"
         subtitle="Email first, then AI call if unpaid, then human escalation"
         right={
-          <Badge variant="outline" className="border-hairline">
+          <Badge variant="outline" className="border-hairline bg-white/45">
             {totalEvents} events
           </Badge>
         }
       />
 
-      <ol className="relative space-y-0">
+      <ol className="relative space-y-2">
         {steps.map((step, index) => (
           <EscalationStepRow
             key={step.key}
@@ -137,11 +140,11 @@ function EscalationStepRow({
   const hasPending = step.events.some((e) => e.status === "pending");
 
   return (
-    <li className="relative flex gap-4 pb-8">
+    <li className="relative flex gap-4 rounded-[26px] border border-hairline bg-surface/46 p-5">
       <div className="flex flex-col items-center">
         <div
           className={cn(
-            "grid size-9 shrink-0 place-items-center rounded-full border-2 bg-surface-2",
+            "grid size-10 shrink-0 place-items-center rounded-full border-2 bg-surface-2 shadow-sm",
             hasActivity && step.key === "resolved" && "border-positive/50 text-positive",
             hasActivity && step.key !== "resolved" && "border-primary/50 text-primary",
             !hasActivity && "border-hairline text-muted-foreground",
@@ -149,7 +152,7 @@ function EscalationStepRow({
         >
           {STEP_ICONS[step.key]}
         </div>
-        {!isLast && <div className="mt-1 w-0.5 flex-1 bg-hairline" />}
+        {!isLast && <div className="mt-2 w-0.5 flex-1 bg-gradient-to-b from-sky-300/60 to-transparent" />}
       </div>
 
       <div className="min-w-0 flex-1 space-y-3">
@@ -160,16 +163,16 @@ function EscalationStepRow({
             </span>
             <span className="font-semibold">{step.title}</span>
             {hasPending && (
-              <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning h-5">
+              <Badge variant="outline" className="h-5 border-warning/40 bg-warning/10 text-warning">
                 Action needed
               </Badge>
             )}
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">{step.subtitle}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{step.subtitle}</p>
         </div>
 
         {step.events.length === 0 ? (
-          <p className="rounded-xl border border-dashed hairline bg-surface-2/30 px-4 py-3 text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed hairline bg-surface-2/36 px-4 py-4 text-sm text-muted-foreground">
             {step.key === "email" && "No emails sent yet."}
             {step.key === "agent_call" && "Escalates here when email follow-up has not resulted in payment."}
             {step.key === "human_call" && "Escalates here when AI follow-up still has not resulted in payment."}
@@ -191,13 +194,13 @@ function EventCard({ event }: { event: TimelineEvent }) {
   const meta = KIND_META[event.kind];
 
   return (
-    <li className="rounded-xl border hairline bg-surface-2/40 px-4 py-3">
+    <li className="rounded-2xl border hairline bg-surface-2/48 px-4 py-4 transition-colors duration-200 hover:bg-white/70">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={cn(
-                "grid size-6 place-items-center rounded-full border hairline bg-surface",
+                "grid size-7 place-items-center rounded-full border hairline bg-surface shadow-sm",
                 meta.tone === "positive" && "text-positive",
                 meta.tone === "info" && "text-info",
                 meta.tone === "warning" && "text-warning",

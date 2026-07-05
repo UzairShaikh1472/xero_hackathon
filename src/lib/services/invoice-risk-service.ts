@@ -1,6 +1,7 @@
 import type { ApiEnvelope, InvoiceRisk, InvoiceRiskSnapshot } from "../domain/types.js";
 import { estimateRecovery } from "../../engines/recovery.js";
 import { getPhaseOneSnapshotData } from "./phase-one-sync-service.js";
+import { calculateUkLatePaymentEstimate } from "./uk-late-payment-service.js";
 
 function buildRiskScore(daysOverdue: number, amountDue: number) {
   const overdueWeight = Math.min(50, daysOverdue * 4);
@@ -33,6 +34,10 @@ export async function buildInvoiceRiskResponse(): Promise<ApiEnvelope<InvoiceRis
       const riskScore = buildRiskScore(invoice.daysOverdue, invoice.amountDue.amount);
       const priority = buildPriority(riskScore);
       const recovery = estimateRecovery(invoice.amountDue.amount, invoice.daysOverdue);
+      const latePaymentEstimate = calculateUkLatePaymentEstimate(
+        invoice.amountDue.amount,
+        invoice.daysOverdue,
+      );
 
       const item: InvoiceRisk = {
         id: `risk_${invoice.id}`,
@@ -54,7 +59,24 @@ export async function buildInvoiceRiskResponse(): Promise<ApiEnvelope<InvoiceRis
             : "Prepare a polite follow-up and monitor payment timing.",
         recoveryProbability: recovery.recoveryProbability,
         expectedDaysToCollect: recovery.expectedDaysToCollect,
-        expectedRecovery: { amount: recovery.expectedRecovery, currency }
+        expectedRecovery: { amount: recovery.expectedRecovery, currency },
+        statutoryInterest: {
+          amount: latePaymentEstimate.statutoryInterest,
+          currency,
+        },
+        fixedCompensation: {
+          amount: latePaymentEstimate.fixedCompensation,
+          currency,
+        },
+        overdueBalanceWithCharges: {
+          amount: latePaymentEstimate.updatedBalance,
+          currency,
+        },
+        statutoryAnnualRatePercent: Number(
+          (latePaymentEstimate.statutoryAnnualRate * 100).toFixed(2),
+        ),
+        statutoryBaseRatePercent: Number((latePaymentEstimate.baseRate * 100).toFixed(2)),
+        latePaymentAssumptionNote: latePaymentEstimate.assumptionNote,
       };
 
       return item;
