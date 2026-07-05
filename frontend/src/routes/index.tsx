@@ -1,8 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { CheckCircle } from "lucide-react";
-
-import { AuthCard } from "@/components/auth/auth-card";
+import { ArrowRight, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -149,27 +147,37 @@ function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="px-6 pt-20 pb-8">
-        <div className="mx-auto grid max-w-[1100px] grid-cols-1 items-center gap-12 lg:grid-cols-2">
-          <div className="space-y-5 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 rounded-full border hairline bg-surface px-3.5 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
-              <span className="inline-block size-1.5 rounded-full bg-accent" />
-              Built on Xero
-            </div>
-            <h1 className="text-5xl font-semibold tracking-tight leading-[1.1] text-foreground">
-              Your cash picture,<br />ready to act on.
-            </h1>
-            <p className="mx-auto max-w-md text-lg text-muted-foreground lg:mx-0">
-              Connect Xero. See which invoices are worth chasing and which customers are worth nurturing. Send AI-drafted follow-ups in one click.
-            </p>
+      <section className="px-6 pt-20 pb-6 text-center">
+        <div className="mx-auto max-w-[640px] space-y-5">
+          <div className="inline-flex items-center gap-2 rounded-full border hairline bg-surface px-3.5 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
+            <span className="inline-block size-1.5 rounded-full bg-accent" />
+            Built on Xero
           </div>
-
-          <div className="mx-auto w-full max-w-[400px] lg:mx-0 lg:max-w-none">
-            <AuthCard />
-          </div>
+          <h1 className="text-5xl font-semibold tracking-tight leading-[1.1] text-foreground">
+            Your cash picture,<br />ready to act on.
+          </h1>
+          <p className="mx-auto max-w-md text-lg text-muted-foreground">
+            Connect Xero. See which invoices are worth chasing and which customers are worth nurturing. Send AI-drafted follow-ups in one click.
+          </p>
+          <Link to="/login">
+            <Button size="lg" className="gap-2" style={{ boxShadow: "var(--shadow-neon)" }}>
+              Login <ArrowRight className="size-4" />
+            </Button>
+          </Link>
         </div>
       </section>
 
+      {/* Dashboard mockup */}
+      <section className="px-6 pb-4">
+        <div className="mx-auto max-w-[1100px]">
+          <div className="mb-4 grid max-w-lg grid-cols-3 gap-3 mx-auto">
+            <StatPill value="£34k" label="recoverable cash" />
+            <StatPill value="13" label="overdue invoices" />
+            <StatPill value="1-click" label="to send follow-up" />
+          </div>
+          <DashboardMockup />
+        </div>
+      </section>
 
       {/* Steps */}
       <section className="border-t hairline px-6 py-16">
