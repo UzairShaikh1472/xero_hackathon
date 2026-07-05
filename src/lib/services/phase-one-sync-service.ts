@@ -194,6 +194,20 @@ export async function getPhaseOneSnapshot() {
   return buildEnvelope(await getPhaseOneSnapshotData());
 }
 
+export async function forceRefreshPhaseOneSnapshot(): Promise<PhaseOneSnapshot> {
+  const tokenSet = getTokenSet();
+  const tenant = getTenant();
+  if (!tokenSet || !tenant) {
+    throw new HttpError(401, "Not connected to Xero");
+  }
+
+  clearSnapshotCache();
+  const snapshot = await syncLiveSnapshot(tenant);
+  cachedSnapshot = snapshot;
+  cachedAt = Date.now();
+  return snapshot;
+}
+
 export async function getPhaseOneSnapshotData(): Promise<PhaseOneSnapshot> {
   const now = Date.now();
   if (cachedSnapshot && now - cachedAt < CACHE_TTL_MS) {

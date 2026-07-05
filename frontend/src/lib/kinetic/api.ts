@@ -631,6 +631,46 @@ export async function selectXeroOrganization(tenantId: string): Promise<{
   return envelope.data;
 }
 
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
+}
+
+export async function syncXeroData(): Promise<{
+  lastSyncAt: string;
+  invoicesCount: number;
+  contactsCount: number;
+  organizationName: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/api/xero/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const body = (await res.json()) as ApiEnvelope<{
+      lastSyncAt: string;
+      invoicesCount: number;
+      contactsCount: number;
+      organizationName: string;
+    }> & { data?: { message?: string } };
+    if (!res.ok || !body.ok) {
+      throw new ApiRequestError(
+        body.data?.message ?? `Sync failed: ${res.status} ${res.statusText}`,
+        res.status,
+      );
+    }
+    return body.data;
+  } catch (error) {
+    rethrowIfBackendUnreachable(error);
+  }
+}
+
 export async function fetchHealth(): Promise<HealthData> {
   try {
     const res = await fetch(`${API_BASE}/api/health`);

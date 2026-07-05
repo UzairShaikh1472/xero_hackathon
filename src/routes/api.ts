@@ -22,7 +22,7 @@ import { buildHealthResponse } from "../lib/services/health-service.js";
 import { buildInvoiceRiskResponse } from "../lib/services/invoice-risk-service.js";
 import { buildLiquidityResponse } from "../lib/services/liquidity-service.js";
 import { buildOpenPayablesResponse } from "../lib/services/payables-service.js";
-import { clearSnapshotCache, getPhaseOneSnapshot, getPhaseOneSnapshotData, handleOAuthCallback, selectOrganization } from "../lib/services/phase-one-sync-service.js";
+import { clearSnapshotCache, forceRefreshPhaseOneSnapshot, getPhaseOneSnapshot, getPhaseOneSnapshotData, handleOAuthCallback, selectOrganization } from "../lib/services/phase-one-sync-service.js";
 import { buildVoiceChatResponse } from "../lib/services/voice-chat-service.js";
 import { buildVoiceCallCompleteResponse } from "../lib/services/voice-call-report-service.js";
 import { buildVoiceTtsResponse } from "../lib/services/elevenlabs-tts-service.js";
@@ -213,6 +213,25 @@ apiRouter.get("/sync/phase-one", async (_request, response, next) => {
   try {
     const payload = await getPhaseOneSnapshot();
     response.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+apiRouter.post("/xero/sync", async (_request, response, next) => {
+  try {
+    const snapshot = await forceRefreshPhaseOneSnapshot();
+    response.json({
+      ok: true,
+      mode: "live",
+      generatedAt: new Date().toISOString(),
+      data: {
+        lastSyncAt: snapshot.sync.lastSyncAt,
+        invoicesCount: snapshot.sync.invoicesCount,
+        contactsCount: snapshot.sync.contactsCount,
+        organizationName: snapshot.sync.organizationName
+      }
+    });
   } catch (error) {
     next(error);
   }

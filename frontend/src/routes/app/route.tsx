@@ -48,6 +48,7 @@ function AppShell() {
     handleSendVoiceInvite,
     handleStartCall,
     handleConnectXero,
+    handleRefresh,
     refetch,
     resetSession,
     startTour,
@@ -70,7 +71,7 @@ function AppShell() {
         isFetching={isFetching}
         connectingXero={connectingXero}
         onConnectXero={handleConnectXero}
-        onRefresh={() => refetch()}
+        onRefresh={() => void handleRefresh()}
         onReset={resetSession}
         onStartTour={startTour}
       />

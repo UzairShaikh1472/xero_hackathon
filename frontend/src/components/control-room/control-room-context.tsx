@@ -5,12 +5,14 @@ import { toast } from "sonner";
 import { controlRoomQuery, draftsQuery, healthQuery } from "@/lib/kinetic/queries";
 import { AppLoadingState } from "@/components/control-room/app-loading-state";
 import {
+  ApiRequestError,
   createVoiceSession,
   fetchHealth,
   fetchXeroAuthUrl,
   sendDraftEmail,
   sendVoiceInvite,
   simulateExecute,
+  syncXeroData,
 } from "@/lib/kinetic/api";
 import type {
   CommunicationResult,
@@ -45,6 +47,7 @@ type ControlRoomContextValue = {
   ) => Promise<void>;
   handleStartCall: (draft: NegotiationDraft) => Promise<void>;
   handleConnectXero: () => Promise<void>;
+  handleRefresh: () => Promise<void>;
   refetch: () => void;
   resetSession: () => void;
   startTour: () => void;
@@ -73,6 +76,7 @@ export function ControlRoomProvider({ children }: { children: ReactNode }) {
   const [communications, setCommunications] = useState<CommunicationResult[]>([]);
   const [tourStep, setTourStep] = useState<number | null>(null);
   const [connectingXero, setConnectingXero] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -215,6 +219,32 @@ export function ControlRoomProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const handleRefresh = async () => {
+    if (mergedData.snapshot.mode === "live") {
+      setIsSyncing(true);
+      try {
+        await syncXeroData();
+        await queryClient.invalidateQueries({ queryKey: ["kinetic"] });
+        toast.success("Xero data refreshed");
+      } catch (err) {
+        if (err instanceof ApiRequestError && err.status === 401) {
+          toast.error("Reconnect Xero", {
+            description: "Your Xero session has expired.",
+          });
+          return;
+        }
+        toast.error(err instanceof Error ? err.message : "Failed to refresh Xero data");
+      } finally {
+        setIsSyncing(false);
+      }
+      return;
+    }
+
+    void refetch();
+    void queryClient.invalidateQueries({ queryKey: ["kinetic", "follow-ups"] });
+    void queryClient.invalidateQueries({ queryKey: ["kinetic", "drafts"] });
+  };
+
   const resetSession = () => {
     setExecutions([]);
     setCommunications([]);
@@ -226,7 +256,7 @@ export function ControlRoomProvider({ children }: { children: ReactNode }) {
       value={{
         data: mergedData,
         health,
-        isFetching,
+        isFetching: isFetching || isSyncing,
         isDraftsFetching: isDraftsPending || isDraftsFetching,
         isDraftsError,
         draftsError: draftsError instanceof Error ? draftsError : null,
@@ -243,6 +273,7 @@ export function ControlRoomProvider({ children }: { children: ReactNode }) {
         handleSendVoiceInvite,
         handleStartCall,
         handleConnectXero,
+        handleRefresh,
         refetch: () => {
           void refetch();
           void queryClient.invalidateQueries({ queryKey: ["kinetic", "follow-ups"] });
