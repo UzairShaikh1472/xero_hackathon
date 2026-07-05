@@ -36,7 +36,8 @@ const envSchema = z.object({
   ELEVENLABS_API_KEY: z.string().default(""),
   ELEVENLABS_VOICE_ID: z.string().default(""),
   ELEVENLABS_DEMO_VOICE_ID: z.string().default(""),
-  ELEVENLABS_MODEL: z.string().default("eleven_flash_v2_5")
+  ELEVENLABS_MODEL: z.string().default("eleven_flash_v2_5"),
+  ELEVENLABS_MODEL_ID: z.string().default("eleven_flash_v2_5")
 });
 
 export const env = envSchema.parse(process.env);

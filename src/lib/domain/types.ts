@@ -52,6 +52,7 @@ export type HealthStatus = {
   emailConfigured: boolean;
   voiceConfigured: boolean;
   browserVoiceConfigured: boolean;
+  elevenLabsConfigured: boolean;
 };
 
 export type SyncStatus = {
