@@ -18,6 +18,25 @@ const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
   "http://localhost:3001";
 
+export const BACKEND_UNREACHABLE_MESSAGE = `Cannot reach backend at ${API_BASE}. Start it with npm run dev in the project root.`;
+
+export function isBackendUnreachableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes(BACKEND_UNREACHABLE_MESSAGE) ||
+    message.includes("Failed to fetch") ||
+    message.includes("ECONNREFUSED") ||
+    message.includes("NetworkError")
+  );
+}
+
+function rethrowIfBackendUnreachable(error: unknown): never {
+  if (isBackendUnreachableError(error)) {
+    throw new Error(BACKEND_UNREACHABLE_MESSAGE);
+  }
+  throw error;
+}
+
 type Money = { amount: number; currency: string };
 
 type ApiEnvelope<T> = {
@@ -153,38 +172,46 @@ function normalizeConfidence(
 }
 
 async function fetchEnvelope<T>(path: string): Promise<ApiEnvelope<T>> {
-  const res = await fetch(`${API_BASE}${path}`);
-  const body = (await res.json()) as ApiEnvelope<T> & {
-    data?: { message?: string };
-  };
-  if (!res.ok) {
-    if (res.status === 429) {
-      throw new Error("Xero rate limit reached. Wait a minute and click Retry");
+  try {
+    const res = await fetch(`${API_BASE}${path}`);
+    const body = (await res.json()) as ApiEnvelope<T> & {
+      data?: { message?: string };
+    };
+    if (!res.ok) {
+      if (res.status === 429) {
+        throw new Error("Xero rate limit reached. Wait a minute and click Retry");
+      }
+      throw new Error(
+        body.data?.message ?? `Failed to fetch ${path}: ${res.status} ${res.statusText}`,
+      );
     }
-    throw new Error(
-      body.data?.message ?? `Failed to fetch ${path}: ${res.status} ${res.statusText}`,
-    );
+    if (!body.ok) {
+      const message = body.data?.message ?? `Backend returned ok:false for ${path}`;
+      throw new Error(message);
+    }
+    return body;
+  } catch (error) {
+    rethrowIfBackendUnreachable(error);
   }
-  if (!body.ok) {
-    const message = body.data?.message ?? `Backend returned ok:false for ${path}`;
-    throw new Error(message);
-  }
-  return body;
 }
 
 async function postJson<T>(path: string, payload: unknown): Promise<ApiEnvelope<T>> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const body = (await res.json()) as ApiEnvelope<T> & {
-    data?: { message?: string };
-  };
-  if (!res.ok || !body.ok) {
-    throw new Error(body.data?.message ?? `Request failed: ${res.status} ${res.statusText}`);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = (await res.json()) as ApiEnvelope<T> & {
+      data?: { message?: string };
+    };
+    if (!res.ok || !body.ok) {
+      throw new Error(body.data?.message ?? `Request failed: ${res.status} ${res.statusText}`);
+    }
+    return body;
+  } catch (error) {
+    rethrowIfBackendUnreachable(error);
   }
-  return body;
 }
 
 function daysFromReason(reason: string): number {
@@ -532,45 +559,95 @@ function warnIfModeMismatch(
 }
 
 export async function fetchXeroAuthUrl(): Promise<string> {
-  const res = await fetch(`${API_BASE}/api/xero/auth-url`);
-  const body = (await res.json()) as {
-    ok: boolean;
-    data?: { authUrl?: string; message?: string };
-  };
-  if (!res.ok || !body.ok || !body.data?.authUrl) {
-    throw new Error(
-      body.data?.message ??
-        `Failed to fetch Xero auth URL: ${res.status} ${res.statusText}`,
-    );
+  try {
+    const res = await fetch(`${API_BASE}/api/xero/auth-url`);
+    const body = (await res.json()) as {
+      ok: boolean;
+      data?: { authUrl?: string; message?: string };
+    };
+    if (!res.ok || !body.ok || !body.data?.authUrl) {
+      throw new Error(
+        body.data?.message ??
+          `Failed to fetch Xero auth URL: ${res.status} ${res.statusText}`,
+      );
+    }
+    return body.data.authUrl;
+  } catch (error) {
+    rethrowIfBackendUnreachable(error);
   }
-  return body.data.authUrl;
 }
 
 export type HealthData = {
   xeroConfigured: boolean;
   xeroConnected: boolean;
+  pendingOrgSelection: boolean;
   authReady: boolean;
   fallbackEnabled: boolean;
   lastSyncAt: string | null;
+  organizationName: string | null;
   emailConfigured: boolean;
   voiceConfigured: boolean;
   browserVoiceConfigured: boolean;
   elevenLabsConfigured?: boolean;
 };
 
-export async function fetchHealth(): Promise<HealthData> {
-  const res = await fetch(`${API_BASE}/api/health`);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch health: ${res.status} ${res.statusText}`);
-  }
+export type XeroOrganization = {
+  tenantId: string;
+  tenantName: string;
+  tenantType: string;
+};
+
+export async function fetchXeroOrganizations(): Promise<{
+  organizations: XeroOrganization[];
+  selectedTenantId: string | null;
+  needsSelection: boolean;
+}> {
+  const res = await fetch(`${API_BASE}/api/xero/organizations`);
   const body = (await res.json()) as {
     ok: boolean;
-    data?: HealthData & { message?: string };
+    data?: {
+      organizations: XeroOrganization[];
+      selectedTenantId: string | null;
+      needsSelection: boolean;
+      message?: string;
+    };
   };
-  if (!body.ok || !body.data) {
-    throw new Error(body.data?.message ?? "Backend health check failed");
+  if (!res.ok || !body.ok || !body.data) {
+    throw new Error(body.data?.message ?? `Failed to fetch organizations: ${res.status}`);
   }
   return body.data;
+}
+
+export async function selectXeroOrganization(tenantId: string): Promise<{
+  tenantId: string;
+  tenantName: string;
+  connected: boolean;
+}> {
+  const envelope = await postJson<{
+    tenantId: string;
+    tenantName: string;
+    connected: boolean;
+  }>("/api/xero/select-organization", { tenantId });
+  return envelope.data;
+}
+
+export async function fetchHealth(): Promise<HealthData> {
+  try {
+    const res = await fetch(`${API_BASE}/api/health`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch health: ${res.status} ${res.statusText}`);
+    }
+    const body = (await res.json()) as {
+      ok: boolean;
+      data?: HealthData & { message?: string };
+    };
+    if (!body.ok || !body.data) {
+      throw new Error(body.data?.message ?? "Backend health check failed");
+    }
+    return body.data;
+  } catch (error) {
+    rethrowIfBackendUnreachable(error);
+  }
 }
 
 export async function fetchControlRoom(): Promise<ControlRoomData> {
@@ -612,13 +689,7 @@ export async function fetchReceivablesDraftsBatch(): Promise<NegotiationDraft[]>
 
     return [...receivables.data.drafts, ...reengagement.data.drafts].map(mapBackendDraft);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to load drafts";
-    if (message.includes("Failed to fetch") || message.includes("ECONNREFUSED")) {
-      throw new Error(
-        `Cannot reach backend at ${API_BASE}. Start it with npm run dev in the project root.`,
-      );
-    }
-    throw error;
+    rethrowIfBackendUnreachable(error);
   }
 }
 

@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteRouteImport } from './routes/app/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
+import { Route as XeroOrganizationsRouteImport } from './routes/xero/organizations'
 import { Route as CallTokenRouteImport } from './routes/call/$token'
 import { Route as AppCashRouteImport } from './routes/app/cash'
 import { Route as AppActionsRouteImport } from './routes/app/actions'
@@ -37,6 +38,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const XeroOrganizationsRoute = XeroOrganizationsRouteImport.update({
+  id: '/xero/organizations',
+  path: '/xero/organizations',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CallTokenRoute = CallTokenRouteImport.update({
   id: '/call/$token',
   path: '/call/$token',
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/app/actions': typeof AppActionsRoute
   '/app/cash': typeof AppCashRoute
   '/call/$token': typeof CallTokenRoute
+  '/xero/organizations': typeof XeroOrganizationsRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/app/actions': typeof AppActionsRoute
   '/app/cash': typeof AppCashRoute
   '/call/$token': typeof CallTokenRoute
+  '/xero/organizations': typeof XeroOrganizationsRoute
   '/app': typeof AppIndexRoute
 }
 export interface FileRoutesById {
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/app/actions': typeof AppActionsRoute
   '/app/cash': typeof AppCashRoute
   '/call/$token': typeof CallTokenRoute
+  '/xero/organizations': typeof XeroOrganizationsRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
@@ -89,9 +98,17 @@ export interface FileRouteTypes {
     | '/app/actions'
     | '/app/cash'
     | '/call/$token'
+    | '/xero/organizations'
     | '/app/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/app/actions' | '/app/cash' | '/call/$token' | '/app'
+  to:
+    | '/'
+    | '/login'
+    | '/app/actions'
+    | '/app/cash'
+    | '/call/$token'
+    | '/xero/organizations'
+    | '/app'
   id:
     | '__root__'
     | '/'
@@ -100,6 +117,7 @@ export interface FileRouteTypes {
     | '/app/actions'
     | '/app/cash'
     | '/call/$token'
+    | '/xero/organizations'
     | '/app/'
   fileRoutesById: FileRoutesById
 }
@@ -108,6 +126,7 @@ export interface RootRouteChildren {
   AppRouteRoute: typeof AppRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
   CallTokenRoute: typeof CallTokenRoute
+  XeroOrganizationsRoute: typeof XeroOrganizationsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -139,6 +158,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRouteRoute
+    }
+    '/xero/organizations': {
+      id: '/xero/organizations'
+      path: '/xero/organizations'
+      fullPath: '/xero/organizations'
+      preLoaderRoute: typeof XeroOrganizationsRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/call/$token': {
       id: '/call/$token'
@@ -185,6 +211,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRouteRoute: AppRouteRouteWithChildren,
   LoginRoute: LoginRoute,
   CallTokenRoute: CallTokenRoute,
+  XeroOrganizationsRoute: XeroOrganizationsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
