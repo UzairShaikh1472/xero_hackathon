@@ -13,3 +13,4 @@ frontend/.output/
 frontend/.wrangler/
 *.log
 .DS_Store
+.vercel

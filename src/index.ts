@@ -40,10 +40,14 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
   });
 });
 
-app.listen(env.PORT, () => {
-  logger.info("server.started", {
-    port: env.PORT,
-    fallbackMode: env.USE_XERO_FALLBACK,
-    nodeEnv: env.NODE_ENV
+export default app;
+
+if (!process.env.VERCEL) {
+  app.listen(env.PORT, () => {
+    logger.info("server.started", {
+      port: env.PORT,
+      fallbackMode: env.USE_XERO_FALLBACK,
+      nodeEnv: env.NODE_ENV
+    });
   });
-});
+}
