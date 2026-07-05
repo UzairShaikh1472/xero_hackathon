@@ -32,7 +32,7 @@ export function channelLabel(channel: FollowUpChannel): string {
     case "email":
       return "Email";
     case "agent_call":
-      return "Call with agent";
+      return "Voice agent";
     case "human_call":
       return "Call with human";
   }

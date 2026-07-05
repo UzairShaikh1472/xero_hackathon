@@ -555,6 +555,7 @@ export type HealthData = {
   emailConfigured: boolean;
   voiceConfigured: boolean;
   browserVoiceConfigured: boolean;
+  elevenLabsConfigured?: boolean;
 };
 
 export async function fetchHealth(): Promise<HealthData> {
@@ -707,6 +708,18 @@ export async function fetchDemoNarration(
     audioUrl?: string;
     audioProvider?: "elevenlabs";
   }>("/api/demo/narration", { text });
+  return envelope.data;
+}
+
+export type VoiceTtsResult = {
+  fallback: boolean;
+  audioBase64?: string;
+  mimeType?: string;
+  message?: string;
+};
+
+export async function fetchVoiceTts(text: string): Promise<VoiceTtsResult> {
+  const envelope = await postJson<VoiceTtsResult>("/api/voice/tts", { text });
   return envelope.data;
 }
 
