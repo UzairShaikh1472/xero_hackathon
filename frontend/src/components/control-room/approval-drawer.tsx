@@ -279,7 +279,7 @@ export function ApprovalDrawer({
                       {sending ? <Loader2 className="size-4 animate-spin" /> : null}
                       {draft.agent === "reengagement"
                         ? "Send reactivation agent invite"
-                        : "Send voice invite"}
+                        : "Send call agent"}
                     </Button>
                     <Button
                       variant="outline"
