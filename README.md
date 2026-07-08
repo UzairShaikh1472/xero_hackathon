@@ -1,17 +1,18 @@
 # UpFlow
 
-UpFlow is a Xero-connected cash control room with:
+UpFlow is a Xero-connected cash control room designed to help teams monitor cash position, track risk, and automate follow-up actions from a single workflow.
 
-- live Xero OAuth
-- live invoice and contact sync
-- fallback demo data
-- summary, liquidity, at-risk, revenue, payables, and execution history APIs
-- draft generation for receivables, payables, and re-engagement actions
-- email reminders for receivables under 14 days overdue
-- automated call reminders for receivables overdue by 15+ days
-- simulated approval flow with idempotency
+## Highlights
 
-## Main backend routes
+- Xero OAuth integration for live account connectivity
+- Invoice and contact synchronization with fallback demo data
+- Liquidity, at-risk invoices, revenue opportunity, payables, and execution history endpoints
+- Draft generation for receivables, payables, and re-engagement actions
+- Automated email reminders for receivables under 14 days overdue
+- Automated call reminders for receivables overdue by 15+ days
+- Simulated approval flow with idempotent execution support
+
+## Core API Routes
 
 - `GET /api/health`
 - `GET /api/summary`
@@ -31,86 +32,75 @@ UpFlow is a Xero-connected cash control room with:
 - `POST /api/simulate/execute`
 - `POST /api/xero/disconnect`
 
-## Local setup
+## Tech Stack
 
-1. Install backend dependencies:
+### Backend
 
-```bash
-pnpm install
-```
+- Node.js
+- TypeScript
+- Express
+- OpenAI SDK
+- Google Generative AI SDK
+- Nodemailer
+- Zod
 
-2. Install frontend dependencies:
+### Frontend
 
-```bash
-cd frontend
-pnpm install
-```
+- React
+- Vite
+- TypeScript
+- TanStack Router
+- Tailwind CSS
+- Radix UI
 
-3. Create `.env` from `.env.example`.
+## Local Setup
 
-4. Set these important values:
+1. Install backend dependencies from the repository root.
+2. Install frontend dependencies from the `frontend` directory.
+3. Create a `.env` file from `.env.example`.
+4. Add the required Xero, SMTP, and Twilio configuration values.
+5. Start the backend from the repository root.
+6. Start the frontend from the `frontend/` directory.
 
-```env
-PORT=3001
-FRONTEND_APP_URL=http://localhost:8080
-USE_XERO_FALLBACK=false
-XERO_CLIENT_ID=your-client-id
-XERO_CLIENT_SECRET=your-client-secret
-XERO_REDIRECT_URI=http://localhost:3001/api/xero/callback
-XERO_SCOPES=openid profile email offline_access accounting.transactions accounting.contacts accounting.settings accounting.reports.read
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=
-SMTP_PASS=
-SMTP_FROM=
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_FROM_NUMBER=
-```
+## Environment Notes
 
-5. Start the backend from the repo root:
+Important values include:
 
-```bash
-pnpm dev
-```
+- `PORT`
+- `FRONTEND_APP_URL`
+- `USE_XERO_FALLBACK`
+- `XERO_CLIENT_ID`
+- `XERO_CLIENT_SECRET`
+- `XERO_REDIRECT_URI`
+- `XERO_SCOPES`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_FROM_NUMBER`
 
-6. Start the frontend from `frontend/`:
+## Xero App Setup
 
-```bash
-pnpm dev
-```
-
-## Xero app setup
-
-In the Xero developer app:
+In the Xero developer dashboard:
 
 - set the redirect URI to `http://localhost:3001/api/xero/callback`
-- keep the client ID and client secret ready
-- ensure the requested scopes match the backend config
+- keep the client ID and client secret available for local configuration
+- ensure the requested scopes match the backend configuration
 
-## Notes
+## Behavior Notes
 
 - OAuth success redirects to `FRONTEND_APP_URL/?xero=connected`
-- fallback mode still works if live sync is unavailable
-- draft generation is live
-- reminder emails only send when SMTP is configured
-- reminder calls only place when Twilio Voice is configured
+- fallback mode remains usable if live sync is unavailable
+- reminder emails require SMTP configuration
+- reminder calls require Twilio Voice configuration
 - invoices under 14 days overdue are routed to email
 - invoices overdue by 15 days or more are routed to voice
-- invoices at exactly 14 days overdue remain a manual review lane for now
+- invoices at exactly 14 days overdue remain in a manual review lane
 
-## External setup for live reminders
+## Status
 
-For email:
-
-- use any SMTP provider such as Gmail SMTP, Outlook, SendGrid, or Mailgun
-- fill in `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`
-- make sure the sender mailbox is allowed to send externally
-
-For voice:
-
-- create a Twilio account and buy or verify an outbound phone number
-- fill in `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER`
-- the current implementation uses Twilio REST API plus TwiML `<Say>` for a polite reminder script
-- for richer live conversation later, switch the scripted call flow to Twilio ConversationRelay or another realtime voice stack
+This repository represents a functional hackathon-style product prototype with real integration points, automated workflows, and a clear path toward production hardening.
